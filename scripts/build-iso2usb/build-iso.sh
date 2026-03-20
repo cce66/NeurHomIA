@@ -285,7 +285,8 @@ if [ -f "$GRUB_CFG" ]; then
     # Sauvegarde du fichier original
     cp "$GRUB_CFG" "$GRUB_CFG.orig"
     # Ajout des paramètres autoinstall à chaque entrée linux
-    sudo sed -i 's|linux /casper/vmlinuz|linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/autoinstall/|g' "$GRUB_CFG"
+  # sudo sed -i 's|linux /casper/vmlinuz|linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/autoinstall/|g' "$GRUB_CFG"
+    sudo sed -i 's|linux \+/casper/vmlinuz|& autoinstall ds=nocloud\;s=/cdrom/autoinstall/|g' "$GRUB_CFG"
     
     if grep -q "autoinstall" "$GRUB_CFG"; then
         echo -e "${GREEN}   Fichier grub.cfg modifié avec succès.${NC}"
