@@ -278,9 +278,6 @@ cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
 # ------------------------------
 # 10) Modification du fichier grub.cfg pour forcer l'autoinstall
 # ------------------------------
-# ------------------------------
-# 10) Ajout entrée GRUB Autoinstall propre
-# ------------------------------
 echo ""
 echo -e "${YELLOW}10) Ajout entrée GRUB Autoinstall...${NC}"
 
@@ -292,8 +289,8 @@ if [ -f "$GRUB_CFG" ]; then
     cp "$GRUB_CFG" "$GRUB_CFG.orig"
 
     # Création de l'entrée Autoinstall
-    AUTOINSTALL_ENTRY=$(cat <<'EOF'
-menuentry "Autoinstall Ubuntu Server" {
+AUTOINSTALL_ENTRY=$(cat <<EOF
+menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
     linux   /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
     initrd  /casper/initrd
