@@ -589,26 +589,35 @@ burn_iso() {
         fi
 
         # Vérifier si le périphérique a des partitions montées
-        mounted_partitions=$(lsblk -no NAME,MOUNTPOINT "$selected_dev" 2>/dev/null | awk '$2 {print $1, $2}')
-        if [ -n "$mounted_partitions" ]; then
-            echo -e "${RED}  Le périphérique $selected_dev a des partitions montées :${NC}"
-            echo "$mounted_partitions"
-            echo -e "${YELLOW}  Voulez-vous démonter automatiquement ces partitions ? (o/N)${NC}"
-            read -r unmount_answer
-            if [[ "$unmount_answer" =~ ^[OoYy]$ ]]; then
-                mount_points=$(echo "$mounted_partitions" | awk '{print $2}')
-                for mp in $mount_points; do
-                    echo -e "   Démontage de $mp..."
-                    sudo umount "$mp" || {
-                        echo -e "${RED}   Échec du démontage de $mp. Vérifiez que le point de montage n'est pas utilisé.${NC}"
-                        continue 2
-                    }
-                done
-            else
-                echo -e "${RED}   Veuillez démonter manuellement les partitions avant de continuer.${NC}"
-                continue
-            fi
-        fi
+for mp in $mount_points; do
+    echo -e "   Démontage de $mp..."
+
+    # Quitter le point de montage si on est dedans
+    if [[ "$PWD" == "$mp"* ]]; then
+        echo "   ⚠️ Vous êtes dans $mp → déplacement vers /tmp"
+        cd /tmp || exit 1
+    fi
+
+    # Tenter un démontage classique
+    if sudo umount "$mp"; then
+        echo "   ✅ Démonté proprement"
+        continue
+    fi
+
+    echo "   ⚠️ Échec, tentative lazy unmount..."
+
+    # Tentative lazy
+    if sudo umount -l "$mp"; then
+        echo "   ✅ Démonté (lazy)"
+        continue
+    fi
+
+    echo "   ❌ Toujours bloqué → processus utilisant le disque :"
+    fuser -vm "$mp"
+
+    echo -e "${RED}   Échec définitif du démontage.${NC}"
+    continue 2
+done
 
         echo -e "${RED}   Attention : vous allez écraser toutes les données sur $selected_dev.${NC}"
         echo -e "${YELLOW}   Êtes-vous sûr de vouloir continuer ? (o/n)${NC}"
