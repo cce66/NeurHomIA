@@ -71,7 +71,7 @@ fi
 # 5) Extraction
 # ------------------------------
 echo -e "${YELLOW}5) Extraction${NC}"
-7z x "$WORK_DIR/$ISO_FILENAME" -o"$EXTRACT_DIR"
+xorriso -osirrox on -indev "$ISO" -extract / "$EXTRACT_DIR"
 
 # ------------------------------
 # 6) Autoinstall
