@@ -278,24 +278,55 @@ cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
 # ------------------------------
 # 10) Modification du fichier grub.cfg pour forcer l'autoinstall
 # ------------------------------
+# ------------------------------
+# 10) Ajout entrée GRUB Autoinstall propre
+# ------------------------------
 echo ""
-echo -e "${YELLOW}10) Modification du fichier grub.cfg pour forcer l'autoinstall...${NC}"
+echo -e "${YELLOW}10) Ajout entrée GRUB Autoinstall...${NC}"
+
 GRUB_CFG="$EXTRACT_DIR/boot/grub/grub.cfg"
+
 if [ -f "$GRUB_CFG" ]; then
-    # Sauvegarde du fichier original
+
+    # Sauvegarde
     cp "$GRUB_CFG" "$GRUB_CFG.orig"
-    # Ajout des paramètres autoinstall à chaque entrée linux
-    sudo sed -i 's|linux \+/casper/vmlinuz|& autoinstall ds=nocloud\;s=/cdrom/autoinstall/|g' "$GRUB_CFG"
-    
-    if grep -q "autoinstall" "$GRUB_CFG"; then
-        echo -e "${GREEN}   Fichier grub.cfg modifié avec succès.${NC}"
-      else
-        echo -e "ERREUR : la modification de grub.cfg a échoué"
+
+    # Création de l'entrée Autoinstall
+    AUTOINSTALL_ENTRY=$(cat <<'EOF'
+menuentry "Autoinstall Ubuntu Server" {
+    set gfxpayload=keep
+    linux   /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
+    initrd  /casper/initrd
+}
+EOF
+)
+
+    # Ajout en première position (après le header GRUB)
+    awk -v entry="$AUTOINSTALL_ENTRY" '
+    BEGIN {added=0}
+    /^menuentry / && added==0 {
+        print entry
+        added=1
+    }
+    {print}
+    ' "$GRUB_CFG" > "$GRUB_CFG.new"
+
+    mv "$GRUB_CFG.new" "$GRUB_CFG"
+
+    # 🔥 Forcer cette entrée par défaut + timeout
+    sed -i 's/^set default=.*/set default=0/' "$GRUB_CFG" 2>/dev/null || echo "set default=0" >> "$GRUB_CFG"
+    sed -i 's/^set timeout=.*/set timeout=5/' "$GRUB_CFG" 2>/dev/null || echo "set timeout=5" >> "$GRUB_CFG"
+
+    # Vérification
+    if grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
+        echo -e "${GREEN}   Entrée Autoinstall ajoutée avec succès.${NC}"
+    else
+        echo -e "${RED}   ERREUR : ajout échoué.${NC}"
         exit 1
     fi
-    
-  else
-    echo -e "${RED}   Fichier grub.cfg introuvable ! L'autoinstall pourrait ne pas fonctionner.${NC}"
+
+else
+    echo -e "${RED}   grub.cfg introuvable !${NC}"
     exit 1
 fi
 
