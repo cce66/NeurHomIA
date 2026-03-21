@@ -3,6 +3,14 @@
 # Description : Personnalise une ISO Ubuntu pour exécuter un script au démarrage,
 #               puis crée une clé USB bootable.
 # Utilisation : sudo ./creer_live_usb_perso.sh -i <iso> -s <script> [-o <output.iso>] [-d <périphérique>]
+#-i : l’ISO originale (Ubuntu Desktop 24.04 de préférence)
+# -s : le script à intégrer
+# -o : nom de l’ISO résultante (facultatif)
+# -d : périphérique USB (attention : toutes les données seront effacées)
+
+# sudo apt update && sudo apt install squashfs-tools xorriso gdisk pv
+# sudo ./creer_live_usb_perso.sh -i ubuntu-24.04-desktop-amd64.iso -s mon_script.sh -o ubuntu_perso.iso -d /dev/sdc
+#
 
 set -euo pipefail
 
