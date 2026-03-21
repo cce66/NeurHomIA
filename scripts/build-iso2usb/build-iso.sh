@@ -145,15 +145,59 @@ rm -f "$FIRSTBOOT_TMP"
 # 3) Vérification des dépendances
 # ------------------------------
 echo ""
-echo -e "${YELLOW}3) Vérification des dépendances...${NC}"
-command -v wget >/dev/null 2>&1 || { echo -e "${RED}   wget est requis. Installez-le avec : sudo apt install wget${NC}"; exit 1; }
-command -v 7z >/dev/null 2>&1 || { echo -e "${RED}   p7zip-full est requis. Installez-le avec : sudo apt install p7zip-full${NC}"; exit 1; }
-command -v openssl >/dev/null 2>&1 || { echo -e "${RED}   openssl est requis. Installez-le avec : sudo apt install openssl${NC}"; exit 1; }
-command -v xorriso >/dev/null 2>&1 || { echo -e "${RED}   xorriso est requis. Installez-le avec : sudo apt install xorriso${NC}"; exit 1; }
-command -v squashfs-tools >/dev/null 2>&1 || { echo -e "${RED}   squashfs-tools est requis. Installez-le avec : sudo apt install squashfs-tools${NC}"; exit 1; }
-command -v schroot >/dev/null 2>&1 || { echo -e "${RED}   schroot est requis. Installez-le avec : sudo apt install schroot${NC}"; exit 1; }
-command -v genisoimage >/dev/null 2>&1 || { echo -e "${RED}   genisoimage est requis. Installez-le avec : sudo apt install genisoimage${NC}"; exit 1; }
-echo -e "${GREEN}   Dépendances OK${NC}"
+echo -e "${YELLOW}Vérification des dépendances...${NC}"
+
+local deps=(
+    wget
+    p7zip-full
+    openssl
+    xorriso
+    squashfs-tools
+    schroot
+    rsync
+    syslinux-utils
+    isolinux
+    genisoimage
+)
+
+local missing=()
+for dep in "${deps[@]}"; do
+    if ! dpkg -s "$dep" >/dev/null 2>&1; then
+        missing+=("$dep")
+    fi
+done
+
+if [ ${#missing[@]} -eq 0 ]; then
+    echo -e "${GREEN}   Toutes les dépendances sont installées.${NC}"
+    return 0
+fi
+
+echo -e "${YELLOW}   Dépendances manquantes : ${missing[*]}${NC}"
+
+# Mode non interactif (CI / SaaS)
+if [ "${AUTO_INSTALL_DEPS:-true}" = true ]; then
+    echo -e "${CYAN}   Installation automatique en cours...${NC}"
+
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update -y
+    apt-get install -y "${missing[@]}"
+
+    # Vérification finale
+    for dep in "${missing[@]}"; do
+        if ! dpkg -s "$dep" >/dev/null 2>&1; then
+            echo -e "${RED}   Échec installation : $dep${NC}"
+            exit 1
+        fi
+    done
+
+    echo -e "${GREEN}   Dépendances installées avec succès.${NC}"
+
+else
+    echo -e "${RED}   Installation automatique désactivée.${NC}"
+    echo -e "${YELLOW}   Lancez : sudo apt install ${missing[*]}${NC}"
+    exit 1
+fi
 
 # ------------------------------
 # 4) Préparation des dossiers avec sauvegarde de l'ancien autoinstall
