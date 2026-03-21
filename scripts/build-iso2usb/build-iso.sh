@@ -144,60 +144,63 @@ rm -f "$FIRSTBOOT_TMP"
 # ------------------------------
 # 3) Vérification des dépendances
 # ------------------------------
-echo ""
-echo -e "${YELLOW}Vérification des dépendances...${NC}"
-
-local deps=(
-    wget
-    p7zip-full
-    openssl
-    xorriso
-    squashfs-tools
-    schroot
-    rsync
-    syslinux-utils
-    isolinux
-    genisoimage
-)
-
-local missing=()
-for dep in "${deps[@]}"; do
-    if ! dpkg -s "$dep" >/dev/null 2>&1; then
-        missing+=("$dep")
-    fi
-done
-
-if [ ${#missing[@]} -eq 0 ]; then
-    echo -e "${GREEN}   Toutes les dépendances sont installées.${NC}"
-    return 0
-fi
-
-echo -e "${YELLOW}   Dépendances manquantes : ${missing[*]}${NC}"
-
-# Mode non interactif (CI / SaaS)
-if [ "${AUTO_INSTALL_DEPS:-true}" = true ]; then
-    echo -e "${CYAN}   Installation automatique en cours...${NC}"
-
-    export DEBIAN_FRONTEND=noninteractive
-
-    apt-get update -y
-    apt-get install -y "${missing[@]}"
-
-    # Vérification finale
-    for dep in "${missing[@]}"; do
+verifier_dependances() {
+    echo ""
+    echo -e "${YELLOW}Vérification des dépendances...${NC}"
+    
+    local deps=(
+        wget
+        p7zip-full
+        openssl
+        xorriso
+        squashfs-tools
+        schroot
+        rsync
+        syslinux-utils
+        isolinux
+        genisoimage
+    )
+    
+    local missing=()
+    for dep in "${deps[@]}"; do
         if ! dpkg -s "$dep" >/dev/null 2>&1; then
-            echo -e "${RED}   Échec installation : $dep${NC}"
-            exit 1
+            missing+=("$dep")
         fi
     done
-
-    echo -e "${GREEN}   Dépendances installées avec succès.${NC}"
-
-else
-    echo -e "${RED}   Installation automatique désactivée.${NC}"
-    echo -e "${YELLOW}   Lancez : sudo apt install ${missing[*]}${NC}"
-    exit 1
-fi
+    
+    if [ ${#missing[@]} -eq 0 ]; then
+        echo -e "${GREEN}   Toutes les dépendances sont installées.${NC}"
+        return 0
+    fi
+    
+    echo -e "${YELLOW}   Dépendances manquantes : ${missing[*]}${NC}"
+    
+    # Mode non interactif (CI / SaaS)
+    if [ "${AUTO_INSTALL_DEPS:-true}" = true ]; then
+        echo -e "${CYAN}   Installation automatique en cours...${NC}"
+    
+        export DEBIAN_FRONTEND=noninteractive
+    
+        apt-get update -y
+        apt-get install -y "${missing[@]}"
+    
+        # Vérification finale
+        for dep in "${missing[@]}"; do
+            if ! dpkg -s "$dep" >/dev/null 2>&1; then
+                echo -e "${RED}   Échec installation : $dep${NC}"
+                exit 1
+            fi
+        done
+    
+        echo -e "${GREEN}   Dépendances installées avec succès.${NC}"
+    
+    else
+        echo -e "${RED}   Installation automatique désactivée.${NC}"
+        echo -e "${YELLOW}   Lancez : sudo apt install ${missing[*]}${NC}"
+        exit 1
+    fi
+}
+verifier_dependances
 
 # ------------------------------
 # 4) Préparation des dossiers avec sauvegarde de l'ancien autoinstall
