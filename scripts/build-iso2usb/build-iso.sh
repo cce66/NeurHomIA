@@ -197,17 +197,17 @@ fi
 # OUTPUT_ISO="$WORK_DIR/${PROJECT_NAME_LOWER}-server-${ISO_VERSION}-auto.iso"
 # ------------------------------
 echo ""
-echo -e "${YELLOW}6) Extraction de l'ISO Ubuntu Server ${ISO_VERSION}...${NC}"
-# 7z x "$WORK_DIR/$ISO_FILENAME" -o"$EXTRACT_DIR"
+echo -e "${YELLOW}6) Extraction ISO (mode robuste)...${NC}"
 
-# On monte l'image ISO
-sudo mount -o loop "$WORK_DIR/$ISO_FILENAME" /mnt
+mkdir -p /mnt/iso
+mount -o loop "$WORK_DIR/$ISO_FILENAME" /mnt/iso
 
-# On copie son contenu dans le dossier $EXTRACT_DIR : l'option -a permet de conserver les droits des fichiers copiés
-cp -av /mnt/. "$EXTRACT_DIR"
+rsync -aHAX --exclude=/casper/filesystem.squashfs /mnt/iso/ "$EXTRACT_DIR/"
 
-# Une fois cela fait, on démonte l'ISO :
-sudo umount /mnt
+# copie brute du squashfs
+cp /mnt/iso/casper/filesystem.squashfs "$EXTRACT_DIR/casper/"
+
+umount /mnt/iso
 
 
 # ------------------------------
@@ -256,13 +256,16 @@ autoinstall:
     - git
     - whiptail
     - curl
-    - language-pack-fr          # Paquet de langue français
+    - language-pack-fr           # Paquet de langue français
     - language-pack-fr-base      # Paquet de base pour le français
     - wfrench                    # Dictionnaire français (optionnel)
   late-commands:
     - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
     - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
     - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
+    - curtin in-target -- mkdir -p /opt/${PROJECT_NAME_LOWER}-microservices
+    - curtin in-target -- git clone https://github.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME_LOWER}-microservices /opt/${PROJECT_NAME_LOWER}-microservices
+    - curtin in-target -- docker compose -f /opt/${PROJECT_NAME_LOWER}-microservices/docker-compose.yml up -d
     - |
       cat <<'SERV' > /target/etc/systemd/system/${PROJECT_NAME_LOWER}-firstboot.service
       [Unit]
@@ -280,6 +283,9 @@ autoinstall:
       WantedBy=multi-user.target
       SERV
     - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
+
+
+    
   shutdown: reboot
 EOF
 
@@ -333,8 +339,8 @@ EOF
     mv "$GRUB_CFG.new" "$GRUB_CFG"
 
     # 🔥 Forcer cette entrée par défaut + timeout
-    sed -i 's/^set default=.*/set default=0/' "$GRUB_CFG" 2>/dev/null || echo "set default=0" >> "$GRUB_CFG"
-    sed -i 's/^set timeout=.*/set timeout=5/' "$GRUB_CFG" 2>/dev/null || echo "set timeout=5" >> "$GRUB_CFG"
+    sed -i '/^set default=/d' "$GRUB_CFG" 2>/dev/null || echo "set default=0" >> "$GRUB_CFG"
+    sed -i '/^set timeout=/d' "$GRUB_CFG" 2>/dev/null || echo "set timeout=5" >> "$GRUB_CFG"
 
     # Vérification
     if grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
@@ -388,13 +394,40 @@ fi
 
 # Création de l'ISO hybride (BIOS + UEFI)
 echo ""
-echo -e "${GREEN}   Création de l'ISO...${NC}"
-xorriso -as mkisofs -r -V "$LABEL" -J -joliet-long -l \
-    -iso-level 3 -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -b boot/grub/i386-pc/eltorito.img -c boot.catalog \
-    -eltorito-alt-boot -e "$EFI_PATH" -no-emul-boot \
-    -isohybrid-gpt-basdat -isohybrid-apm-hfsplus \
-    -o "$OUTPUT_ISO" "$EXTRACT_DIR"
+echo -e "${GREEN}   Création de l'ISO bootable hybride (BIOS + UEFI)...${NC}"
+
+# Détection EFI réelle
+if [ -f "$EXTRACT_DIR/EFI/boot/bootx64.efi" ]; then
+    EFI_BOOT="EFI/boot/bootx64.efi"
+else
+    echo -e "${RED}   ERREUR : bootx64.efi introuvable !${NC}"
+    exit 1
+fi
+
+# Vérification MBR isohybrid
+ISOLINUX_MBR="/usr/lib/ISOLINUX/isohdpfx.bin"
+if [ ! -f "$ISOLINUX_MBR" ]; then
+    echo -e "${RED}   ERREUR : isohdpfx.bin manquant (installer syslinux-common)${NC}"
+    exit 1
+fi
+
+xorriso -as mkisofs \
+    -r -V "$LABEL" \
+    -o "$OUTPUT_ISO" \
+    -J -joliet-long -l \
+    -iso-level 3 \
+    -isohybrid-mbr "$ISOLINUX_MBR" \
+    -partition_offset 16 \
+    -c boot.catalog \
+    -b boot/grub/i386-pc/eltorito.img \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+    -eltorito-alt-boot \
+    -e "$EFI_BOOT" \
+        -no-emul-boot \
+    -isohybrid-gpt-basdat \
+    "$EXTRACT_DIR"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}   ISO créée avec succès : $OUTPUT_ISO${NC}"
