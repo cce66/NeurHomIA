@@ -255,22 +255,39 @@ if [ ! -f boot_hybrid.img ] || [ ! -f efi.img ]; then
 fi
 
 # Construire l'ISO avec xorriso
-xorriso -as mkisofs -r \
-    -V "Ubuntu custom" \
-    -o "$OUTPUT_ISO" \
-    --grub2-mbr boot_hybrid.img \
-    -partition_offset 16 \
-    --mbr-force-bootable \
-    -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b efi.img \
-    -appended_as_gpt \
-    -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
-    -c '/boot.catalog' \
-    -b '/boot/grub/i386-pc/eltorito.img' \
-        -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
-    -eltorito-alt-boot \
-    -e '--interval:appended_partition_2:::' \
-        -no-emul-boot \
-    iso/
+# xorriso -as mkisofs -r \
+#    -V "Ubuntu custom" \
+#    -o "$OUTPUT_ISO" \
+#    --grub2-mbr boot_hybrid.img \
+#    -partition_offset 16 \
+#    --mbr-force-bootable \
+#    -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b efi.img \
+#    -appended_as_gpt \
+#    -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
+#    -c '/boot.catalog' \
+#    -b '/boot/grub/i386-pc/eltorito.img' \
+#        -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
+#    -eltorito-alt-boot \
+#    -e '--interval:appended_partition_2:::' \
+#        -no-emul-boot \
+#    iso/
+
+xorriso -as mkisofs \
+  -r -V "$LABEL" \
+  -o "$OUTPUT_ISO" \
+  -J -joliet-long -l \
+  -iso-level 3 \
+  -partition_offset 16 \
+  -b boot/grub/i386-pc/eltorito.img \
+    -c boot.catalog \
+    -no-emul-boot \
+    -boot-load-size 4 \
+    -boot-info-table \
+  -eltorito-alt-boot \
+  -e boot/grub/efi.img \
+    -no-emul-boot \
+  -isohybrid-gpt-basdat \
+  "$EXTRACT_DIR"
 
 # Rendre l'ISO hybride (pour clé USB)
 if command -v isohybrid >/dev/null 2>&1; then
