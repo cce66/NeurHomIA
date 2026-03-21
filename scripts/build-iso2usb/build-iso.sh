@@ -150,6 +150,9 @@ command -v wget >/dev/null 2>&1 || { echo -e "${RED}   wget est requis. Installe
 command -v 7z >/dev/null 2>&1 || { echo -e "${RED}   p7zip-full est requis. Installez-le avec : sudo apt install p7zip-full${NC}"; exit 1; }
 command -v openssl >/dev/null 2>&1 || { echo -e "${RED}   openssl est requis. Installez-le avec : sudo apt install openssl${NC}"; exit 1; }
 command -v xorriso >/dev/null 2>&1 || { echo -e "${RED}   xorriso est requis. Installez-le avec : sudo apt install xorriso${NC}"; exit 1; }
+command -v squashfs-tools >/dev/null 2>&1 || { echo -e "${RED}   squashfs-tools est requis. Installez-le avec : sudo apt install squashfs-tools${NC}"; exit 1; }
+command -v schroot >/dev/null 2>&1 || { echo -e "${RED}   schroot est requis. Installez-le avec : sudo apt install schroot${NC}"; exit 1; }
+command -v genisoimage >/dev/null 2>&1 || { echo -e "${RED}   genisoimage est requis. Installez-le avec : sudo apt install genisoimage${NC}"; exit 1; }
 echo -e "${GREEN}   Dépendances OK${NC}"
 
 # ------------------------------
@@ -167,7 +170,12 @@ if [ -d "$AUTOINSTALL_DIR" ]; then
     echo -e "${GREEN}   Ancien dossier autoinstall sauvegardé sous : $BACKUP_AUTOINSTALL${NC}"
 fi
 
-rm -rf "$EXTRACT_DIR"
+# Suppression de l'ancien répertoire s'il existe
+if [ -d "$EXTRACT_DIR" ]; then
+  rm -rf "$EXTRACT_DIR"
+fi
+
+# Création du répertoire pour l'extraction et du répertoire pour les fichiers d'autoinstall
 mkdir -p "$EXTRACT_DIR" "$AUTOINSTALL_DIR"
 
 # ------------------------------
@@ -183,10 +191,24 @@ fi
 
 # ------------------------------
 # 6) Extraction de l'ISO
+# WORK_DIR="$HOME/${PROJECT_NAME_LOWER}-iso"
+# EXTRACT_DIR="$WORK_DIR/extracted"
+# AUTOINSTALL_DIR="$WORK_DIR/autoinstall"
+# OUTPUT_ISO="$WORK_DIR/${PROJECT_NAME_LOWER}-server-${ISO_VERSION}-auto.iso"
 # ------------------------------
 echo ""
 echo -e "${YELLOW}6) Extraction de l'ISO Ubuntu Server ${ISO_VERSION}...${NC}"
-7z x "$WORK_DIR/$ISO_FILENAME" -o"$EXTRACT_DIR"
+# 7z x "$WORK_DIR/$ISO_FILENAME" -o"$EXTRACT_DIR"
+
+# On monte l'image ISO
+sudo mount -o loop "$WORK_DIR/$ISO_FILENAME" /mnt
+
+# On copie son contenu dans le dossier $EXTRACT_DIR : l'option -a permet de conserver les droits des fichiers copiés
+cp -av /mnt/. "$EXTRACT_DIR"
+
+# Une fois cela fait, on démonte l'ISO :
+sudo umount /mnt
+
 
 # ------------------------------
 # 7) Génération du hash du mot de passe
