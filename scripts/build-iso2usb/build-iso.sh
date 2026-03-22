@@ -26,7 +26,7 @@ PROJECT_NAME_UPPER=$(echo "$PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
 USERNAME="neurhomia"                    # Nom de l'utilisateur système
 DEFAULT_PASSWORD="neurhomia"            # Mot de passe par défaut (sera hashé)
 
-GITHUB_OWNER_NAME="moreau66"            # Propriétaire du github 
+GITHUB_OWNER_NAME="cce66"            # Propriétaire du github 
 FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"  
 
 # ------------------------------
