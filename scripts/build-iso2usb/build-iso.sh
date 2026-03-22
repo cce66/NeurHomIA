@@ -353,8 +353,8 @@ EOF
         cp "$GRUB_CFG" "$GRUB_CFG.orig"
 
         # Définition de l'entrée de menu pour l'autoinstall
-        AUTOINSTALL_ENTRY=$(cat <<'EOF'
-menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
+        AUTOINSTALL_ENTRY=$(cat <<EOF
+menuentry "Autoinstallation de Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
     linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
     initrd /casper/initrd
