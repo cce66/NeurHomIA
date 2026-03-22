@@ -6,7 +6,7 @@ set -e
 clear
 
 # ------------------------------
-# Couleurs
+# Couleurs pour l'affichage
 # ------------------------------
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -47,7 +47,7 @@ PASSWORD_HASH=""
 # Fonctions
 # ------------------------------
 
-# Option --noforce
+# Traitement de l'option --noforce
 000_parse_arguments() {
     if [[ "${1:-}" == "--noforce" ]]; then
         FORCE_BUILD=false
@@ -213,8 +213,6 @@ PASSWORD_HASH=""
         echo -e "${YELLOW}   Lancez : sudo apt install ${missing[*]}${NC}"
         exit 1
     fi
-    
-    
 }
 
 # 4) Préparation des dossiers avec sauvegarde de l'ancien autoinstall
@@ -230,14 +228,13 @@ PASSWORD_HASH=""
         echo -e "${GREEN}   Ancien dossier autoinstall sauvegardé sous : $BACKUP_AUTOINSTALL${NC}"
     fi
 
-    # Suppression de l'ancien répertoire s'il existe
+    # Suppression de l'ancien répertoire d'extraction s'il existe
     if [ -d "$EXTRACT_DIR" ]; then
       rm -rf "$EXTRACT_DIR"
     fi
 
     # Création du répertoire pour l'extraction et du répertoire pour les fichiers d'autoinstall
     mkdir -p "$EXTRACT_DIR" "$AUTOINSTALL_DIR"
-
 }
 
 # 5) Téléchargement de l'ISO (si non existante)
@@ -253,12 +250,9 @@ PASSWORD_HASH=""
 
 # 6) Extraction de l'ISO
 06_extract_iso() {
- 
     echo ""
     echo -e "${YELLOW}6) Extraction de l'ISO Ubuntu Server ${ISO_VERSION}...${NC}"
-
     7z x "$WORK_DIR/$ISO_FILENAME" -o"$EXTRACT_DIR"
-    
 }
 
 # 7) Génération du hash du mot de passe
@@ -342,25 +336,24 @@ EOF
     echo -e "${GREEN}   Fichiers d'autoinstall créés avec succès.${NC}"
 }
 
-# 9) Intégration de l'autoinstall
+# 9) Intégration de l'autoinstall dans l'ISO extraite
 09_integrate_autoinstall() {
     cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
 }
 
 # 10) Modification du fichier grub.cfg pour forcer l'autoinstall
 10_modify_grub_cfg() {
-
     echo ""
     echo -e "${YELLOW}10) Ajout entrée GRUB Autoinstall...${NC}"
     GRUB_CFG="$EXTRACT_DIR/boot/grub/grub.cfg"
 
     if [ -f "$GRUB_CFG" ]; then
 
-        # Sauvegarde
+        # Sauvegarde du fichier original
         cp "$GRUB_CFG" "$GRUB_CFG.orig"
 
-        # Création de l'entrée Autoinstall
-AUTOINSTALL_ENTRY=$(cat <<'EOF'
+        # Définition de l'entrée de menu pour l'autoinstall
+        AUTOINSTALL_ENTRY=$(cat <<'EOF'
 menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
     linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
@@ -369,7 +362,7 @@ menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
 EOF
 )
 
-        # Ajout en première position (après le header GRUB)
+        # Ajout de l'entrée en première position (après le header GRUB)
         awk -v entry="$AUTOINSTALL_ENTRY" '
         BEGIN {added=0}
         /^menuentry / && added==0 {
@@ -381,7 +374,7 @@ EOF
 
         mv "$GRUB_CFG.new" "$GRUB_CFG"
 
-        # 🔥 Forcer cette entrée par défaut + timeout
+        # Forcer cette entrée par défaut + timeout
         sed -i '/^set default=/d' "$GRUB_CFG" 2>/dev/null || echo "set default=0" >> "$GRUB_CFG"
         sed -i '/^set timeout=/d' "$GRUB_CFG" 2>/dev/null || echo "set timeout=5" >> "$GRUB_CFG"
 
@@ -397,95 +390,92 @@ EOF
         echo -e "${RED}   Fichier grub.cfg introuvable ! L'autoinstall pourrait ne pas fonctionner.${NC}"
         exit 1
     fi
-    
 }
 
 # 11) Création de l'ISO avec xorriso (détection automatique)
 11_create_iso() {
+    echo ""
+    echo -e "${YELLOW}11) Création de la nouvelle ISO (avec xorriso)...${NC}"
 
-  echo ""
-  echo -e "${YELLOW}11) Création de la nouvelle ISO (avec xorriso)...${NC}"
+    # Vérification du fichier de boot BIOS
+    if [ ! -f "$EXTRACT_DIR/boot/grub/i386-pc/eltorito.img" ]; then
+        echo -e "${RED}   Erreur : fichier 'boot/grub/i386-pc/eltorito.img' introuvable. Vérifiez la structure de l'ISO extraite.${NC}"
+        exit 1
+    fi
 
-  # Vérification du fichier de boot BIOS
-  if [ ! -f "$EXTRACT_DIR/boot/grub/i386-pc/eltorito.img" ]; then
-      echo -e "${RED}   Erreur : fichier 'boot/grub/i386-pc/eltorito.img' introuvable. Vérifiez la structure de l'ISO extraite.${NC}"
-      exit 1
-  fi
+    # Détection du fichier de boot UEFI
+    EFI_PATH=""
+    if [ -f "$EXTRACT_DIR/boot/grub/efi.img" ]; then
+        EFI_PATH="boot/grub/efi.img"
+    else
+        # Recherche insensible à la casse d'un fichier .efi dans le dossier EFI/
+        EFI_FILE=$(find "$EXTRACT_DIR/EFI" -type f -iname "*.efi" 2>/dev/null | head -n1)
+        if [ -n "$EFI_FILE" ]; then
+            EFI_PATH="${EFI_FILE#$EXTRACT_DIR/}"
+            echo -e "${GREEN}   Fichier EFI détecté : $EFI_PATH${NC}"
+        else
+            echo -e "${RED}   Erreur : aucun fichier de boot EFI trouvé (ni efi.img, ni .efi).${NC}"
+            exit 1
+        fi
+    fi
 
-  # Détection du fichier de boot UEFI
-  EFI_PATH=""
-  if [ -f "$EXTRACT_DIR/boot/grub/efi.img" ]; then
-      EFI_PATH="boot/grub/efi.img"
-  else
-      # Recherche insensible à la casse d'un fichier .efi dans le dossier EFI/
-      EFI_FILE=$(find "$EXTRACT_DIR/EFI" -type f -iname "*.efi" 2>/dev/null | head -n1)
-      if [ -n "$EFI_FILE" ]; then
-          EFI_PATH="${EFI_FILE#$EXTRACT_DIR/}"
-          echo -e "${GREEN}   Fichier EFI détecté : $EFI_PATH${NC}"
-      else
-          echo -e "${RED}   Erreur : aucun fichier de boot EFI trouvé (ni efi.img, ni .efi).${NC}"
-          exit 1
-      fi
-  fi
+    # Sauvegarde de l'ancienne ISO si elle existe
+    if [ -f "$OUTPUT_ISO" ]; then
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        BACKUP_ISO="${OUTPUT_ISO%.*}_${TIMESTAMP}.${OUTPUT_ISO##*.}"
+        mv "$OUTPUT_ISO" "$BACKUP_ISO"
+        echo ""
+        echo -e "${GREEN}   Ancienne ISO sauvegardée sous : $BACKUP_ISO${NC}"
+    fi
 
-  # Sauvegarde de l'ancienne ISO si elle existe
-  if [ -f "$OUTPUT_ISO" ]; then
-      TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-      BACKUP_ISO="${OUTPUT_ISO%.*}_${TIMESTAMP}.${OUTPUT_ISO##*.}"
-      mv "$OUTPUT_ISO" "$BACKUP_ISO"
-      echo ""
-      echo -e "${GREEN}   Ancienne ISO sauvegardée sous : $BACKUP_ISO${NC}"
-  fi
+    # Création de l'ISO hybride (BIOS + UEFI)
+    echo ""
+    echo -e "${GREEN}   Création de l'ISO bootable hybride (BIOS + UEFI)...${NC}"
 
-  # Création de l'ISO hybride (BIOS + UEFI)
-  echo ""
-  echo -e "${GREEN}   Création de l'ISO bootable hybride (BIOS + UEFI)...${NC}"
+    # Détection du fichier EFI réel
+    if [ -f "$EXTRACT_DIR/EFI/boot/bootx64.efi" ]; then
+        EFI_BOOT="EFI/boot/bootx64.efi"
+    else
+        echo -e "${RED}   ERREUR : bootx64.efi introuvable !${NC}"
+        exit 1
+    fi
 
-  # Détection EFI réelle
-  if [ -f "$EXTRACT_DIR/EFI/boot/bootx64.efi" ]; then
-      EFI_BOOT="EFI/boot/bootx64.efi"
-  else
-      echo -e "${RED}   ERREUR : bootx64.efi introuvable !${NC}"
-      exit 1
-  fi
+    # Vérification de la présence du fichier isohdpfx.bin pour l'hybridation MBR
+    ISOLINUX_MBR="/usr/lib/ISOLINUX/isohdpfx.bin"
+    if [ ! -f "$ISOLINUX_MBR" ]; then
+        echo -e "${RED}   ERREUR : isohdpfx.bin manquant (installer syslinux-common)${NC}"
+        exit 1
+    fi
 
-  # Vérification MBR isohybrid
-  ISOLINUX_MBR="/usr/lib/ISOLINUX/isohdpfx.bin"
-  if [ ! -f "$ISOLINUX_MBR" ]; then
-      echo -e "${RED}   ERREUR : isohdpfx.bin manquant (installer syslinux-common)${NC}"
-      exit 1
-  fi
+    # Commande xorriso pour générer l'ISO hybride
+    xorriso -as mkisofs \
+        -r -V "$LABEL" \
+        -o "$OUTPUT_ISO" \
+        -J -joliet-long -l \
+        -iso-level 3 \
+        -isohybrid-mbr "$ISOLINUX_MBR" \
+        -partition_offset 16 \
+        -c boot.catalog \
+        -b boot/grub/i386-pc/eltorito.img \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+        -eltorito-alt-boot \
+        -e "$EFI_BOOT" \
+            -no-emul-boot \
+        -isohybrid-gpt-basdat \
+        "$EXTRACT_DIR"
 
-  xorriso -as mkisofs \
-      -r -V "$LABEL" \
-      -o "$OUTPUT_ISO" \
-      -J -joliet-long -l \
-      -iso-level 3 \
-      -isohybrid-mbr "$ISOLINUX_MBR" \
-      -partition_offset 16 \
-      -c boot.catalog \
-      -b boot/grub/i386-pc/eltorito.img \
-          -no-emul-boot \
-          -boot-load-size 4 \
-          -boot-info-table \
-      -eltorito-alt-boot \
-      -e "$EFI_BOOT" \
-          -no-emul-boot \
-      -isohybrid-gpt-basdat \
-      "$EXTRACT_DIR"
-
-  if [ $? -eq 0 ]; then
-      echo -e "${GREEN}   ISO créée avec succès : $OUTPUT_ISO${NC}"
-  else
-      echo -e "${RED}   Échec de la création de l'ISO. Vérifiez les messages ci-dessus.${NC}"
-      exit 1
-  fi
-
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}   ISO créée avec succès : $OUTPUT_ISO${NC}"
+    else
+        echo -e "${RED}   Échec de la création de l'ISO. Vérifiez les messages ci-dessus.${NC}"
+        exit 1
+    fi
 }
 
 # 12) Validation de l'ISO générée
 12_validate_iso() {
-
     local iso_path="$1"
     local mount_dir="/tmp/${PROJECT_NAME_LOWER}-iso-check"
     local checks_passed=0
@@ -595,7 +585,6 @@ EOF
 
 # 13) Demande de gravure sur clé USB
 13_burn_iso() {
-
     local iso_path="$1"
     echo ""
     echo -e "${YELLOW}13) Voulez-vous graver cette ISO sur une clé USB ? (o/n)${NC}"
@@ -778,8 +767,6 @@ EOF
 # Exécution principale
 # ------------------------------
 main() {
-
-
     000_parse_arguments "$@"
     001_setup_work_dir
     01_ask_ubuntu_version
