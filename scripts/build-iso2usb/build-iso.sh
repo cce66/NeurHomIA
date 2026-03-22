@@ -360,14 +360,14 @@ EOF
         cp "$GRUB_CFG" "$GRUB_CFG.orig"
 
         # Création de l'entrée Autoinstall
-    AUTOINSTALL_ENTRY=$(cat <<EOF
-    menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
-        set gfxpayload=keep
-        linux   /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
-        initrd  /casper/initrd
-    }
-    EOF
-    )
+AUTOINSTALL_ENTRY=$(cat <<'EOF'
+menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
+    initrd /casper/initrd
+}
+EOF
+)
 
         # Ajout en première position (après le header GRUB)
         awk -v entry="$AUTOINSTALL_ENTRY" '
