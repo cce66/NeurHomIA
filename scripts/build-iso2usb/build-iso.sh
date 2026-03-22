@@ -386,6 +386,13 @@ EOF
             exit 1
         fi
 
+        # Copie vers les chemins UEFI possibles
+        for dest in "$EXTRACT_DIR/EFI/BOOT/grub.cfg" "$EXTRACT_DIR/EFI/ubuntu/grub.cfg"; do
+          mkdir -p "$(dirname "$dest")"
+          cp "$GRUB_CFG" "$dest"
+          echo -e "${GREEN}   Copie vers $dest${NC}"
+        done
+
     else
         echo -e "${RED}   Fichier grub.cfg introuvable ! L'autoinstall pourrait ne pas fonctionner.${NC}"
         exit 1
