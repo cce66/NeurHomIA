@@ -379,7 +379,7 @@ EOF
         sed -i '/^set timeout=/d' "$GRUB_CFG" 2>/dev/null || echo "set timeout=5" >> "$GRUB_CFG"
 
         # Vérification
-        if grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
+        if grep -q "Autoinstallation de Ubuntu Server" "$GRUB_CFG"; then
             echo -e "${GREEN}   Entrée Autoinstall ajoutée avec succès.${NC}"
         else
             echo -e "${RED}   ERREUR : ajout échoué.${NC}"
