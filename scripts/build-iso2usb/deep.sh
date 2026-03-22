@@ -1,110 +1,65 @@
 #!/bin/bash
 # build-iso-server-mcp.sh
-# Construction d'une ISO Ubuntu Server autoinstall MCP-ready
-# Usage : sudo ./build-iso-server-mcp.sh [-v <version>] [-p <projet>] [-u <github_user>] [-d <usb_device>] [--force]
-
 set -euo pipefail
 
 # ------------------------------
-# CONFIGURATION DE BASE
+# Paramètres de base
 # ------------------------------
-DEFAULT_UBUNTU_VERSION="24.04.4"
 PROJECT_NAME="NeurHomIA"
+PROJECT_NAME_LOWER=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
 USERNAME="neurhomia"
 DEFAULT_PASSWORD="neurhomia"
 GITHUB_OWNER_NAME="cce66"
 FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"
+DEFAULT_UBUNTU_VERSION="24.04.4"
 
-WORK_DIR=$(mktemp -d -t "${PROJECT_NAME}-iso-XXXX")
+WORK_DIR="$HOME/${PROJECT_NAME_LOWER}-iso"
 EXTRACT_DIR="$WORK_DIR/extracted"
 AUTOINSTALL_DIR="$WORK_DIR/autoinstall"
-OUTPUT_ISO="$WORK_DIR/${PROJECT_NAME}-server-auto.iso"
-LABEL=$(echo "$PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
+ISO_VERSION="$DEFAULT_UBUNTU_VERSION"
+ISO_FILENAME="ubuntu-${ISO_VERSION}-live-server-amd64.iso"
+OUTPUT_ISO="$WORK_DIR/${PROJECT_NAME_LOWER}-server-${ISO_VERSION}-auto.iso"
+LABEL="${PROJECT_NAME}_SRV"
 [ ${#LABEL} -gt 32 ] && LABEL="${LABEL:0:32}"
 
-# Dépendances
-declare -A DEP_MAP=(
-    ["wget"]="wget"
-    ["7z"]="p7zip-full"
-    ["openssl"]="openssl"
-    ["xorriso"]="xorriso"
-    ["unsquashfs"]="squashfs-tools"
-    ["mksquashfs"]="squashfs-tools"
-    ["rsync"]="rsync"
-    ["isohybrid"]="syslinux-utils"
-)
-AUTO_INSTALL_DEPS=true
+mkdir -p "$WORK_DIR" "$EXTRACT_DIR" "$AUTOINSTALL_DIR"
 
 # ------------------------------
-# COULEURS
+# 1) Téléchargement ISO si nécessaire
 # ------------------------------
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# ------------------------------
-# CHECK DEPENDANCES
-# ------------------------------
-check_deps() {
-    local missing=()
-    for cmd in "${!DEP_MAP[@]}"; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing+=("${DEP_MAP[$cmd]}")
-        fi
-    done
-    if [ ${#missing[@]} -eq 0 ]; then
-        echo -e "${GREEN}Toutes les dépendances sont installées.${NC}"
-        return
-    fi
-    echo -e "${YELLOW}Dépendances manquantes : ${missing[*]}${NC}"
-    if [ "$AUTO_INSTALL_DEPS" = true ]; then
-        echo -e "${CYAN}Installation automatique...${NC}"
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y "${missing[@]}"
-    else
-        echo -e "${RED}Installez-les manuellement : sudo apt install ${missing[*]}${NC}"
-        exit 1
-    fi
-}
-
-check_deps
-
-# ------------------------------
-# TELECHARGEMENT ISO
-# ------------------------------
-ISO_FILENAME="ubuntu-${DEFAULT_UBUNTU_VERSION}-live-server-amd64.iso"
-ISO_URL="https://releases.ubuntu.com/${DEFAULT_UBUNTU_VERSION%.*}/$ISO_FILENAME"
-
 if [ ! -f "$WORK_DIR/$ISO_FILENAME" ]; then
-    echo -e "${GREEN}Téléchargement ISO ${DEFAULT_UBUNTU_VERSION}...${NC}"
+    ISO_URL="https://releases.ubuntu.com/${ISO_VERSION%.*}/ubuntu-${ISO_VERSION}-live-server-amd64.iso"
     wget -O "$WORK_DIR/$ISO_FILENAME" "$ISO_URL"
-else
-    echo -e "${GREEN}ISO déjà présente.${NC}"
 fi
 
 # ------------------------------
-# EXTRACTION ISO (robuste)
+# 2) Extraction ISO (mode robuste)
 # ------------------------------
-echo -e "${YELLOW}[Extraction ISO]${NC}"
-mkdir -p /mnt/iso
-sudo mount -o loop,ro "$WORK_DIR/$ISO_FILENAME" /mnt/iso
-mkdir -p "$EXTRACT_DIR"
-rsync -aHAX --exclude=/casper/filesystem.squashfs /mnt/iso/ "$EXTRACT_DIR"
-cp /mnt/iso/casper/filesystem.squashfs "$EXTRACT_DIR/casper/"
-sudo umount /mnt/iso
+MOUNT_DIR="/mnt/iso"
+sudo mkdir -p "$MOUNT_DIR"
+sudo mount -o loop,ro "$WORK_DIR/$ISO_FILENAME" "$MOUNT_DIR"
+
+# Sur Ubuntu Server, le squashfs est dans live/filesystem.squashfs
+if [ -f "$MOUNT_DIR/live/filesystem.squashfs" ]; then
+    mkdir -p "$EXTRACT_DIR/live"
+    cp -av "$MOUNT_DIR/live/filesystem.squashfs" "$EXTRACT_DIR/live/"
+else
+    echo "❌ Impossible de trouver live/filesystem.squashfs dans l'ISO server"
+    sudo umount "$MOUNT_DIR"
+    exit 1
+fi
+
+# Copier le reste de l'ISO (ISO bootable)
+rsync -aHAX --exclude=/live/filesystem.squashfs "$MOUNT_DIR/" "$EXTRACT_DIR/"
+
+sudo umount "$MOUNT_DIR"
 
 # ------------------------------
-# HASH MOT DE PASSE
+# 3) Création fichiers autoinstall
 # ------------------------------
 PASSWORD_HASH=$(openssl passwd -6 "$DEFAULT_PASSWORD")
-
-# ------------------------------
-# AUTOINSTALL MCP
-# ------------------------------
 mkdir -p "$AUTOINSTALL_DIR"
+
 cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
 autoinstall:
@@ -120,12 +75,11 @@ autoinstall:
           match:
             name: "en*"
           dhcp4: true
-          optional: true
   storage:
     layout:
       name: lvm
   identity:
-    hostname: ${PROJECT_NAME}-box
+    hostname: ${PROJECT_NAME_LOWER}-box
     username: $USERNAME
     password: "$PASSWORD_HASH"
   ssh:
@@ -136,23 +90,19 @@ autoinstall:
     - docker-compose-plugin
     - git
     - curl
-    - whiptail
   late-commands:
-    - mkdir -p /target/opt/${PROJECT_NAME}
-    - curtin in-target -- wget -O /opt/${PROJECT_NAME}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
-    - curtin in-target -- chmod +x /opt/${PROJECT_NAME}/firstboot.sh
-    - curtin in-target -- mkdir -p /target/opt/mcp && curtin in-target -- git clone https://github.com/${GITHUB_OWNER_NAME}/mcp-services /opt/mcp
-    - curtin in-target -- docker compose -f /opt/mcp/docker-compose.yml up -d
-  shutdown: reboot
+    - curtin in-target -- mkdir -p /opt/${PROJECT_NAME_LOWER}
+    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
+    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
+    - curtin in-target -- bash -c "cd /opt/${PROJECT_NAME_LOWER} && git clone https://github.com/${GITHUB_OWNER_NAME}/MCP-services || true"
 EOF
 
 touch "$AUTOINSTALL_DIR/meta-data"
 
-# Copier autoinstall dans l’ISO
 cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
 
 # ------------------------------
-# GRUB Autoinstall
+# 4) Ajout entrée GRUB autoinstall MCP
 # ------------------------------
 GRUB_CFG="$EXTRACT_DIR/boot/grub/grub.cfg"
 if [ -f "$GRUB_CFG" ]; then
@@ -165,46 +115,54 @@ menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
 }
 EOF
 )
-    awk -v entry="$AUTOINSTALL_ENTRY" 'BEGIN{added=0} /^menuentry / && added==0 {print entry; added=1} {print}' "$GRUB_CFG" > "$GRUB_CFG.new"
+    awk -v entry="$AUTOINSTALL_ENTRY" '
+    BEGIN {added=0}
+    /^menuentry / && added==0 {
+        print entry
+        added=1
+    }
+    {print}
+    ' "$GRUB_CFG" > "$GRUB_CFG.new"
     mv "$GRUB_CFG.new" "$GRUB_CFG"
-    sed -i '/^set default=/d' "$GRUB_CFG"; echo "set default=0" >> "$GRUB_CFG"
-    sed -i '/^set timeout=/d' "$GRUB_CFG"; echo "set timeout=5" >> "$GRUB_CFG"
+
+    sed -i '/^set default=/d' "$GRUB_CFG"
+    sed -i '/^set timeout=/d' "$GRUB_CFG"
+    echo "set default=0" >> "$GRUB_CFG"
+    echo "set timeout=5" >> "$GRUB_CFG"
 fi
 
 # ------------------------------
-# REBUILD ISO (BIOS + UEFI)
+# 5) Création ISO bootable MCP-ready
 # ------------------------------
-EFI_BOOT="$EXTRACT_DIR/EFI/boot/bootx64.efi"
+EFI_BOOT=$(find "$EXTRACT_DIR/EFI" -type f -iname "bootx64.efi" | head -1)
+if [ -z "$EFI_BOOT" ]; then
+    echo "❌ EFI boot introuvable"
+    exit 1
+fi
+EFI_BOOT="${EFI_BOOT#$EXTRACT_DIR/}"
+
 ISOLINUX_MBR="/usr/lib/ISOLINUX/isohdpfx.bin"
-
-echo -e "${GREEN}Création ISO bootable...${NC}"
-xorriso -as mkisofs \
-  -r -V "$LABEL" \
-  -o "$OUTPUT_ISO" \
-  -J -joliet-long -l \
-  -iso-level 3 \
-  -isohybrid-mbr "$ISOLINUX_MBR" \
-  -partition_offset 16 \
-  -c boot.catalog \
-  -b boot/grub/i386-pc/eltorito.img \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-  -eltorito-alt-boot \
-  -e "$EFI_BOOT" \
-    -no-emul-boot \
-  -isohybrid-gpt-basdat \
-  "$EXTRACT_DIR"
-
-echo -e "${GREEN}ISO générée : $OUTPUT_ISO${NC}"
-
-# ------------------------------
-# OPTIONNEL : gravure sur USB
-# ------------------------------
-read -p "Voulez-vous graver l'ISO sur clé USB maintenant ? (o/n) " ans
-if [[ "$ans" =~ ^[OoYy]$ ]]; then
-    read -p "Périphérique USB (ex: /dev/sdb) : " USB_DEV
-    sudo dd if="$OUTPUT_ISO" of="$USB_DEV" bs=4M status=progress conv=fsync
-    sync
-    echo -e "${GREEN}Clé USB prête !${NC}"
+if [ ! -f "$ISOLINUX_MBR" ]; then
+    echo "❌ isohdpfx.bin manquant, installer syslinux-utils"
+    exit 1
 fi
 
-echo -e "${GREEN}Build terminé.${NC}"
+xorriso -as mkisofs \
+    -r -V "$LABEL" \
+    -o "$OUTPUT_ISO" \
+    -J -joliet-long -l \
+    -iso-level 3 \
+    -isohybrid-mbr "$ISOLINUX_MBR" \
+    -partition_offset 16 \
+    -c boot.catalog \
+    -b boot/grub/i386-pc/eltorito.img \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+    -eltorito-alt-boot \
+    -e "$EFI_BOOT" \
+        -no-emul-boot \
+    -isohybrid-gpt-basdat \
+    "$EXTRACT_DIR"
+
+echo "✅ ISO générée : $OUTPUT_ISO (MCP-ready, Ubuntu Server)"
