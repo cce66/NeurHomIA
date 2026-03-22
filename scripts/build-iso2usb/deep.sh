@@ -1,317 +1,210 @@
 #!/bin/bash
-# Script : creer_live_usb_perso.sh
-# Description : Personnalise une ISO Ubuntu pour exécuter un script au démarrage,
-#               puis crée une clé USB bootable.
-# Utilisation : sudo ./creer_live_usb_perso.sh -i <iso> -s <script> [-o <output.iso>] [-d <périphérique>]
-#-i : l’ISO originale (Ubuntu Desktop 24.04 de préférence)
-# -s : le script à intégrer
-# -o : nom de l’ISO résultante (facultatif)
-# -d : périphérique USB (attention : toutes les données seront effacées)
-
-# sudo apt update && sudo apt install squashfs-tools xorriso gdisk pv
-# sudo ./creer_live_usb_perso.sh -i ubuntu-24.04-desktop-amd64.iso -s mon_script.sh -o ubuntu_perso.iso -d /dev/sdc
-#
+# build-iso-server-mcp.sh
+# Construction d'une ISO Ubuntu Server autoinstall MCP-ready
+# Usage : sudo ./build-iso-server-mcp.sh [-v <version>] [-p <projet>] [-u <github_user>] [-d <usb_device>] [--force]
 
 set -euo pipefail
 
-rouge='\033[0;31m'
-vert='\033[0;32m'
-jaune='\033[1;33m'
-neutre='\033[0m'
+# ------------------------------
+# CONFIGURATION DE BASE
+# ------------------------------
+DEFAULT_UBUNTU_VERSION="24.04.4"
+PROJECT_NAME="NeurHomIA"
+USERNAME="neurhomia"
+DEFAULT_PASSWORD="neurhomia"
+GITHUB_OWNER_NAME="cce66"
+FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"
 
-afficher_aide() {
-    cat <<EOF
-Utilisation : $0 -i <image.iso> -s <script.sh> [-o <fichier.iso>] [-d <périphérique>] [-h]
+WORK_DIR=$(mktemp -d -t "${PROJECT_NAME}-iso-XXXX")
+EXTRACT_DIR="$WORK_DIR/extracted"
+AUTOINSTALL_DIR="$WORK_DIR/autoinstall"
+OUTPUT_ISO="$WORK_DIR/${PROJECT_NAME}-server-auto.iso"
+LABEL=$(echo "$PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
+[ ${#LABEL} -gt 32 ] && LABEL="${LABEL:0:32}"
 
-    -i    Fichier ISO source (Ubuntu Desktop 24.04 de préférence)
-    -s    Script à exécuter au démarrage de la session live
-    -o    Fichier ISO de sortie (optionnel, par défaut : custom_$(basename "$ISO"))
-    -d    Périphérique USB (ex: /dev/sdb) pour flasher directement l'ISO personnalisée
-    -h    Affiche cette aide
+# Dépendances
+declare -A DEP_MAP=(
+    ["wget"]="wget"
+    ["7z"]="p7zip-full"
+    ["openssl"]="openssl"
+    ["xorriso"]="xorriso"
+    ["unsquashfs"]="squashfs-tools"
+    ["mksquashfs"]="squashfs-tools"
+    ["rsync"]="rsync"
+    ["isohybrid"]="syslinux-utils"
+)
+AUTO_INSTALL_DEPS=true
 
-Exemple : sudo $0 -i ubuntu-24.04.iso -s mon_script.sh -d /dev/sdc
-EOF
-    exit 0
-}
+# ------------------------------
+# COULEURS
+# ------------------------------
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-# Vérifier les dépendances
-verifier_dependances() {
-    local deps=("mount" "umount" "cp" "mkdir" "rm" "chroot" "mksquashfs" "xorriso" "parted" "mkfs.ext4" "dd")
+# ------------------------------
+# CHECK DEPENDANCES
+# ------------------------------
+check_deps() {
     local missing=()
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" >/dev/null 2>&1; then
-            missing+=("$dep")
+    for cmd in "${!DEP_MAP[@]}"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("${DEP_MAP[$cmd]}")
         fi
     done
-    if [ ${#missing[@]} -ne 0 ]; then
-        echo -e "${rouge}Dépendances manquantes : ${missing[*]}${neutre}"
-        echo "Installez-les avec : sudo apt install squashfs-tools xorriso gdisk"
+    if [ ${#missing[@]} -eq 0 ]; then
+        echo -e "${GREEN}Toutes les dépendances sont installées.${NC}"
+        return
+    fi
+    echo -e "${YELLOW}Dépendances manquantes : ${missing[*]}${NC}"
+    if [ "$AUTO_INSTALL_DEPS" = true ]; then
+        echo -e "${CYAN}Installation automatique...${NC}"
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get install -y "${missing[@]}"
+    else
+        echo -e "${RED}Installez-les manuellement : sudo apt install ${missing[*]}${NC}"
         exit 1
     fi
 }
 
-# Nettoyage en cas d'interruption ou d'erreur
-nettoyer() {
-    echo -e "${jaune}Nettoyage...${neutre}"
-    # Démontage des systèmes de fichiers montés dans le chroot
-    if [ -d "$WORK_DIR/squashfs/proc" ]; then
-        umount -lf "$WORK_DIR/squashfs/proc" 2>/dev/null || true
-    fi
-    if [ -d "$WORK_DIR/squashfs/sys" ]; then
-        umount -lf "$WORK_DIR/squashfs/sys" 2>/dev/null || true
-    fi
-    if [ -d "$WORK_DIR/squashfs/dev" ]; then
-        umount -lf "$WORK_DIR/squashfs/dev" 2>/dev/null || true
-    fi
-    if [ -d "$WORK_DIR/squashfs/dev/pts" ]; then
-        umount -lf "$WORK_DIR/squashfs/dev/pts" 2>/dev/null || true
-    fi
-    if [ -d "$WORK_DIR/squashfs/run/dbus" ]; then
-        umount -lf "$WORK_DIR/squashfs/run/dbus" 2>/dev/null || true
-    fi
-    if [ -f "$WORK_DIR/squashfs/etc/resolv.conf" ]; then
-        rm -f "$WORK_DIR/squashfs/etc/resolv.conf"
-    fi
-    if [ -d "$WORK_DIR/iso" ]; then
-        umount -lf "$WORK_DIR/iso" 2>/dev/null || true
-    fi
-    # Suppression du répertoire de travail
-    if [ -n "${WORK_DIR:-}" ] && [ -d "$WORK_DIR" ]; then
-        rm -rf "$WORK_DIR"
-    fi
-    exit 1
+check_deps
+
+# ------------------------------
+# TELECHARGEMENT ISO
+# ------------------------------
+ISO_FILENAME="ubuntu-${DEFAULT_UBUNTU_VERSION}-live-server-amd64.iso"
+ISO_URL="https://releases.ubuntu.com/${DEFAULT_UBUNTU_VERSION%.*}/$ISO_FILENAME"
+
+if [ ! -f "$WORK_DIR/$ISO_FILENAME" ]; then
+    echo -e "${GREEN}Téléchargement ISO ${DEFAULT_UBUNTU_VERSION}...${NC}"
+    wget -O "$WORK_DIR/$ISO_FILENAME" "$ISO_URL"
+else
+    echo -e "${GREEN}ISO déjà présente.${NC}"
+fi
+
+# ------------------------------
+# EXTRACTION ISO (robuste)
+# ------------------------------
+echo -e "${YELLOW}[Extraction ISO]${NC}"
+mkdir -p /mnt/iso
+sudo mount -o loop,ro "$WORK_DIR/$ISO_FILENAME" /mnt/iso
+mkdir -p "$EXTRACT_DIR"
+rsync -aHAX --exclude=/casper/filesystem.squashfs /mnt/iso/ "$EXTRACT_DIR"
+cp /mnt/iso/casper/filesystem.squashfs "$EXTRACT_DIR/casper/"
+sudo umount /mnt/iso
+
+# ------------------------------
+# HASH MOT DE PASSE
+# ------------------------------
+PASSWORD_HASH=$(openssl passwd -6 "$DEFAULT_PASSWORD")
+
+# ------------------------------
+# AUTOINSTALL MCP
+# ------------------------------
+mkdir -p "$AUTOINSTALL_DIR"
+cat > "$AUTOINSTALL_DIR/user-data" <<EOF
+#cloud-config
+autoinstall:
+  version: 1
+  locale: fr_FR.UTF-8
+  keyboard:
+    layout: fr
+  network:
+    network:
+      version: 2
+      ethernets:
+        all-eth:
+          match:
+            name: "en*"
+          dhcp4: true
+          optional: true
+  storage:
+    layout:
+      name: lvm
+  identity:
+    hostname: ${PROJECT_NAME}-box
+    username: $USERNAME
+    password: "$PASSWORD_HASH"
+  ssh:
+    install-server: true
+    allow-pw: true
+  packages:
+    - docker.io
+    - docker-compose-plugin
+    - git
+    - curl
+    - whiptail
+  late-commands:
+    - mkdir -p /target/opt/${PROJECT_NAME}
+    - curtin in-target -- wget -O /opt/${PROJECT_NAME}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
+    - curtin in-target -- chmod +x /opt/${PROJECT_NAME}/firstboot.sh
+    - curtin in-target -- mkdir -p /target/opt/mcp && curtin in-target -- git clone https://github.com/${GITHUB_OWNER_NAME}/mcp-services /opt/mcp
+    - curtin in-target -- docker compose -f /opt/mcp/docker-compose.yml up -d
+  shutdown: reboot
+EOF
+
+touch "$AUTOINSTALL_DIR/meta-data"
+
+# Copier autoinstall dans l’ISO
+cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
+
+# ------------------------------
+# GRUB Autoinstall
+# ------------------------------
+GRUB_CFG="$EXTRACT_DIR/boot/grub/grub.cfg"
+if [ -f "$GRUB_CFG" ]; then
+    cp "$GRUB_CFG" "$GRUB_CFG.orig"
+    AUTOINSTALL_ENTRY=$(cat <<EOF
+menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
+    initrd /casper/initrd
 }
-
-# --- Variables par défaut ---
-ISO=""
-SCRIPT=""
-OUTPUT_ISO=""
-USB_DEV=""
-WORK_DIR=""
-
-trap nettoyer INT TERM EXIT
-
-# --- Options ---
-while getopts "i:s:o:d:h" opt; do
-    case "$opt" in
-        i) ISO="$OPTARG" ;;
-        s) SCRIPT="$OPTARG" ;;
-        o) OUTPUT_ISO="$OPTARG" ;;
-        d) USB_DEV="$OPTARG" ;;
-        h) afficher_aide ;;
-        *) afficher_aide ;;
-    esac
-done
-
-if [ "$EUID" -ne 0 ]; then
-    echo -e "${rouge}Ce script doit être exécuté avec sudo.${neutre}"
-    exit 1
-fi
-
-if [ -z "$ISO" ] || [ -z "$SCRIPT" ]; then
-    echo -e "${rouge}Les options -i et -s sont obligatoires.${neutre}"
-    afficher_aide
-fi
-
-if [ ! -f "$ISO" ]; then
-    echo -e "${rouge}Fichier ISO introuvable : $ISO${neutre}"
-    exit 1
-fi
-
-if [ ! -f "$SCRIPT" ]; then
-    echo -e "${rouge}Script introuvable : $SCRIPT${neutre}"
-    exit 1
-fi
-
-if [ -n "$USB_DEV" ] && [ ! -b "$USB_DEV" ]; then
-    echo -e "${rouge}Périphérique USB invalide : $USB_DEV${neutre}"
-    exit 1
-fi
-
-# Nom de sortie par défaut
-if [ -z "$OUTPUT_ISO" ]; then
-    OUTPUT_ISO="custom_$(basename "$ISO")"
-fi
-
-# Vérifier les dépendances
-verifier_dependances
-
-# --- Préparation du répertoire de travail ---
-WORK_DIR=$(mktemp -d -t livecd_custom_XXXXXX)
-echo -e "${vert}Répertoire de travail : $WORK_DIR${neutre}"
-cd "$WORK_DIR"
-
-mkdir -p iso squashfs
-
-# --- Étape 1 : Extraire l'ISO ---
-echo -e "${vert}[1/6] Extraction du contenu de l'ISO...${neutre}"
-mount -o loop "$ISO" /mnt
-cp -av /mnt/. iso/
-umount /mnt
-
-# --- Étape 2 : Extraire le squashfs ---
-echo -e "${vert}[2/6] Extraction du système de fichiers (squashfs)...${neutre}"
-mount -t squashfs -o loop iso/casper/filesystem.squashfs /mnt
-cp -av /mnt/. squashfs/
-umount /mnt
-
-# --- Étape 3 : Préparer le chroot ---
-echo -e "${vert}[3/6] Préparation du chroot...${neutre}"
-mount --bind /proc squashfs/proc
-mount --bind /sys squashfs/sys
-mount --bind /dev squashfs/dev
-mount --bind /dev/pts squashfs/dev/pts
-mount --bind /run/dbus squashfs/run/dbus 2>/dev/null || true
-
-# Copier la configuration réseau et les dépôts (optionnel)
-cp /etc/resolv.conf squashfs/etc/resolv.conf
-# cp /etc/apt/sources.list squashfs/etc/apt/sources.list  # Attention : même version d'Ubuntu
-
-# --- Étape 4 : Ajouter le script et le configurer au démarrage ---
-echo -e "${vert}[4/6] Ajout du script et configuration du démarrage...${neutre}"
-
-# Copier le script dans le chroot
-SCRIPT_NAME=$(basename "$SCRIPT")
-cp "$SCRIPT" "squashfs/usr/local/bin/$SCRIPT_NAME"
-chmod 755 "squashfs/usr/local/bin/$SCRIPT_NAME"
-
-# Créer un fichier .desktop pour l'autostart (exécution au lancement de la session graphique)
-# Utiliser le répertoire /etc/xdg/autostart/ pour démarrer avec l'utilisateur 'ubuntu'
-mkdir -p squashfs/etc/xdg/autostart
-cat > "squashfs/etc/xdg/autostart/script_perso.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Mon script personnalisé
-Exec=/usr/local/bin/$SCRIPT_NAME
-X-GNOME-Autostart-enabled=true
-NoDisplay=true
 EOF
-
-# Option : ajouter un fichier dans /etc/profile.d/ si on veut l'exécuter dans tous les shells (pas seulement graphique)
-# Attention : cela s'exécutera aussi en mode console.
-cat > "squashfs/etc/profile.d/99-mon_script.sh" <<EOF
-#!/bin/bash
-/usr/local/bin/$SCRIPT_NAME &
-EOF
-chmod 755 "squashfs/etc/profile.d/99-mon_script.sh"
-
-# (Facultatif) On peut également ajouter un service systemd si besoin, mais pour un script simple, autostart suffit.
-
-# --- Étape 5 : Mise à jour de l'initrd (si nécessaire) et nettoyage ---
-echo -e "${vert}[5/6] Nettoyage du chroot et mise à jour de l'initrd...${neutre}"
-
-# Entrer dans le chroot pour mettre à jour l'initrd (au cas où le noyau aurait changé)
-# On le fait même si ce n'est pas indispensable, cela ne pose pas de problème.
-chroot squashfs update-initramfs -u -k all
-
-# Sortir du chroot et démonter
-exit 0 # pour quitter le shell temporaire
-# On redémonte
-umount -lf squashfs/proc
-umount -lf squashfs/sys
-umount -lf squashfs/dev/pts
-umount -lf squashfs/dev
-umount -lf squashfs/run/dbus 2>/dev/null || true
-rm -f squashfs/etc/resolv.conf
-
-# --- Étape 6 : Reconstruire le squashfs et l'ISO ---
-echo -e "${vert}[6/6] Reconstruction du squashfs et de l'ISO...${neutre}"
-
-# Régénérer le manifest
-chmod a+w iso/casper/filesystem.manifest
-chroot squashfs dpkg-query -W --showformat='${Package}  ${Version}\n' > iso/casper/filesystem.manifest
-chmod go-w iso/casper/filesystem.manifest
-
-# Supprimer l'ancien squashfs
-rm -f iso/casper/filesystem.squashfs
-
-# Créer le nouveau squashfs (compression zstd, niveau 22, progress)
-cd squashfs
-mksquashfs . ../iso/casper/filesystem.squashfs -comp zstd -Xcompression-level 22 -progress
-cd ..
-
-# Mettre à jour les fichiers noyau si besoin (si le noyau a changé dans le squashfs)
-# On prend le premier vmlinuz trouvé (attention au nom exact)
-if ls squashfs/boot/vmlinuz-* 1>/dev/null 2>&1; then
-    KERNEL=$(ls squashfs/boot/vmlinuz-* | head -1)
-    INITRD=$(ls squashfs/boot/initrd.img-* | head -1)
-    if [ -f "$KERNEL" ] && [ -f "$INITRD" ]; then
-        cp "$KERNEL" iso/casper/vmlinuz
-        cp "$INITRD" iso/casper/initrd.lz
-    fi
+)
+    awk -v entry="$AUTOINSTALL_ENTRY" 'BEGIN{added=0} /^menuentry / && added==0 {print entry; added=1} {print}' "$GRUB_CFG" > "$GRUB_CFG.new"
+    mv "$GRUB_CFG.new" "$GRUB_CFG"
+    sed -i '/^set default=/d' "$GRUB_CFG"; echo "set default=0" >> "$GRUB_CFG"
+    sed -i '/^set timeout=/d' "$GRUB_CFG"; echo "set timeout=5" >> "$GRUB_CFG"
 fi
 
-# Recalculer les sommes MD5
-cd iso
-find . -path ./isolinux -prune -o -type f -not -name md5sum.txt -print0 | xargs -0 md5sum | tee md5sum.txt
+# ------------------------------
+# REBUILD ISO (BIOS + UEFI)
+# ------------------------------
+EFI_BOOT="$EXTRACT_DIR/EFI/boot/bootx64.efi"
+ISOLINUX_MBR="/usr/lib/ISOLINUX/isohdpfx.bin"
 
-# Télécharger les fichiers boot nécessaires (si absents)
-cd "$WORK_DIR"
-if [ ! -f boot_hybrid.img ] || [ ! -f efi.img ]; then
-    wget -q https://archive.org/download/boot_ubuntu_gpt.tar/boot_ubuntu_gpt.tar.gz
-    gunzip boot_ubuntu_gpt.tar.gz
-    tar -xf boot_ubuntu_gpt.tar
-    rm -f boot_ubuntu_gpt.tar
-fi
-
-# Construire l'ISO avec xorriso
-# xorriso -as mkisofs -r \
-#    -V "Ubuntu custom" \
-#    -o "$OUTPUT_ISO" \
-#    --grub2-mbr boot_hybrid.img \
-#    -partition_offset 16 \
-#    --mbr-force-bootable \
-#    -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b efi.img \
-#    -appended_as_gpt \
-#    -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
-#    -c '/boot.catalog' \
-#    -b '/boot/grub/i386-pc/eltorito.img' \
-#        -no-emul-boot -boot-load-size 4 -boot-info-table --grub2-boot-info \
-#    -eltorito-alt-boot \
-#    -e '--interval:appended_partition_2:::' \
-#        -no-emul-boot \
-#    iso/
-
+echo -e "${GREEN}Création ISO bootable...${NC}"
 xorriso -as mkisofs \
   -r -V "$LABEL" \
   -o "$OUTPUT_ISO" \
   -J -joliet-long -l \
   -iso-level 3 \
+  -isohybrid-mbr "$ISOLINUX_MBR" \
   -partition_offset 16 \
+  -c boot.catalog \
   -b boot/grub/i386-pc/eltorito.img \
-    -c boot.catalog \
-    -no-emul-boot \
-    -boot-load-size 4 \
-    -boot-info-table \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
   -eltorito-alt-boot \
-  -e boot/grub/efi.img \
+  -e "$EFI_BOOT" \
     -no-emul-boot \
   -isohybrid-gpt-basdat \
   "$EXTRACT_DIR"
 
-# Rendre l'ISO hybride (pour clé USB)
-if command -v isohybrid >/dev/null 2>&1; then
-    isohybrid "$OUTPUT_ISO"
-fi
+echo -e "${GREEN}ISO générée : $OUTPUT_ISO${NC}"
 
-echo -e "${vert}ISO personnalisée créée : $OUTPUT_ISO${neutre}"
-
-# --- Étape 7 : Flasher sur USB si demandé ---
-if [ -n "$USB_DEV" ]; then
-    echo -e "${vert}Flash de l'ISO sur $USB_DEV...${neutre}"
-    # Vérifier que le périphérique n'est pas monté
-    mount | grep "^$USB_DEV" && umount "$USB_DEV"* 2>/dev/null || true
-    # Utiliser dd
-    if command -v pv >/dev/null 2>&1; then
-        pv "$OUTPUT_ISO" | dd of="$USB_DEV" bs=4M status=none oflag=sync
-    else
-        dd if="$OUTPUT_ISO" of="$USB_DEV" bs=4M status=progress oflag=sync
-    fi
+# ------------------------------
+# OPTIONNEL : gravure sur USB
+# ------------------------------
+read -p "Voulez-vous graver l'ISO sur clé USB maintenant ? (o/n) " ans
+if [[ "$ans" =~ ^[OoYy]$ ]]; then
+    read -p "Périphérique USB (ex: /dev/sdb) : " USB_DEV
+    sudo dd if="$OUTPUT_ISO" of="$USB_DEV" bs=4M status=progress conv=fsync
     sync
-    echo -e "${vert}Clé USB prête.${neutre}"
+    echo -e "${GREEN}Clé USB prête !${NC}"
 fi
 
-# Supprimer le répertoire de travail (sauf si on veut le garder pour debug)
-trap - EXIT
-nettoyer
-echo -e "${vert}Terminé.${neutre}"
+echo -e "${GREEN}Build terminé.${NC}"
