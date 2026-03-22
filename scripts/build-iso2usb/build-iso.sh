@@ -350,8 +350,7 @@ EOF
     if [ -f "$GRUB_CFG" ]; then
         cp "$GRUB_CFG" "$GRUB_CFG.orig"
 
-        # Créer l'entrée de menu avec substitution de variable
-        # Note : utiliser EOF sans guillemets pour expansion de $PROJECT_NAME
+        # Créer l'entrée de menu avec substitution de variable (sans guillemets autour de EOF)
         AUTOINSTALL_ENTRY=$(cat <<EOF
 menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
@@ -361,7 +360,7 @@ menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
 EOF
 )
 
-        # Ajouter l'entrée en première position (après le header)
+        # Ajouter l'entrée en première position
         awk -v entry="$AUTOINSTALL_ENTRY" '
         BEGIN {added=0}
         /^menuentry / && added==0 {
@@ -372,20 +371,11 @@ EOF
         ' "$GRUB_CFG" > "$GRUB_CFG.new"
         mv "$GRUB_CFG.new" "$GRUB_CFG"
 
-        # Supprimer toutes les lignes set default et set timeout existantes
+        # Supprimer les éventuelles lignes set default et set timeout existantes
         sed -i '/^set default=/d' "$GRUB_CFG"
         sed -i '/^set timeout=/d' "$GRUB_CFG"
 
-        # Ajouter set default=0 et set timeout=10 (ou 5) en tête de fichier
-        # On insère après l'éventuel bloc de configuration initial (lignes commentées)
-        # Pour éviter de les mettre au milieu, on peut les ajouter en fin de fichier,
-        # mais il est préférable de les placer avant le premier menuentry.
-        # On va utiliser une méthode simple : les ajouter en début de fichier.
-        # Mais attention à ne pas casser le header GRUB (lignes commentées).
-        # On va insérer après les lignes qui commencent par #, s'il y en a.
-        # Sinon en début.
-
-        # On crée un fichier temporaire avec les lignes au début
+        # Ajouter les lignes en début de fichier (avant tout menuentry)
         {
             echo "set default=0"
             echo "set timeout=10"
@@ -393,7 +383,7 @@ EOF
         } > "$GRUB_CFG.tmp"
         mv "$GRUB_CFG.tmp" "$GRUB_CFG"
 
-        # Vérifier la présence
+        # Vérification
         if grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
             echo -e "${GREEN}   Entrée Autoinstall ajoutée avec succès.${NC}"
         else
@@ -401,8 +391,7 @@ EOF
             exit 1
         fi
 
-        # Copie pour UEFI (ajouter cette partie)
-        # Créer les dossiers UEFI nécessaires et copier le fichier modifié
+        # Copier vers les répertoires UEFI pour garantir le timeout en mode UEFI
         for uefi_dir in "$EXTRACT_DIR/EFI/BOOT" "$EXTRACT_DIR/EFI/ubuntu"; do
             mkdir -p "$uefi_dir"
             cp "$GRUB_CFG" "$uefi_dir/grub.cfg"
@@ -414,6 +403,7 @@ EOF
         exit 1
     fi
 }
+
 # 11) Création de l'ISO avec xorriso (détection automatique)
 11_create_iso() {
     echo ""
