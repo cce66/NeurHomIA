@@ -529,6 +529,18 @@ EOF
         echo -e "${RED}   Échec de la création de l'ISO. Vérifiez les messages ci-dessus.${NC}"
         exit 1
     fi
+
+    # Vérification que le dossier autoinstall a bien été intégré
+    if command -v isoinfo &>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}   Vérification du contenu de l'ISO avec isoinfo...${NC}"
+        if isoinfo -R -l -i "$OUTPUT_ISO" | grep -q "autoinstall"; then
+            echo -e "${GREEN}   ✅ Dossier autoinstall présent dans l'ISO.${NC}"
+        else
+            echo -e "${RED}   ❌ Dossier autoinstall non trouvé dans l'ISO !${NC}"
+            exit 1
+        fi
+    fi
 }
 
 # 12) Validation de l'ISO générée
