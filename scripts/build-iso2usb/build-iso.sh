@@ -287,9 +287,9 @@ autoinstall:
     layout:
       name: lvm
   identity:
-    hostname: ${PROJECT_NAME_LOWER}-box
-    username: $USERNAME
-    password: "$PASSWORD_HASH"
+    hostname: neurhomia-box
+    username: neurhomia
+    password: "$6$J7J8jrA6cmgAoB1E$We79gw5JNBzzeef9ZVN9kPenE6OEkWNzSpLJcUGfhqYhas3yU4QAKArTVOjkksYqAF4gzItSzU6P1hTv6lRaF/"
   ssh:
     install-server: true
     allow-pw: true
@@ -304,45 +304,37 @@ autoinstall:
     - language-pack-fr-base
     - wfrench
   write_files:
-    # 1) Script wrapper pour firstboot avec logging
-    - path: /opt/${PROJECT_NAME_LOWER}/run-firstboot.sh
+    - path: /opt/neurhomia/firstboot.sh
+      permissions: '0755'
+      content: |
+        #!/bin/bash
+        # Copier ici tout le contenu de firstboot-config.sh
+        echo "NeurHomIA - Premier lancement" > /var/log/firstboot.log
+    - path: /opt/neurhomia/run-firstboot.sh
       permissions: '0755'
       content: |
         #!/bin/bash
         exec > /var/log/firstboot.log 2>&1
-        echo "=== Début du premier lancement : \$(date) ==="
-        /opt/${PROJECT_NAME_LOWER}/firstboot.sh
-        echo "=== Fin du premier lancement : \$(date) ==="
-    # 2) Service systemd modifié pour exécuter le wrapper
-    - path: /etc/systemd/system/${PROJECT_NAME_LOWER}-firstboot.service
+        echo "=== Début du premier lancement : $(date) ==="
+        /opt/neurhomia/firstboot.sh
+        echo "=== Fin du premier lancement : $(date) ==="
+    - path: /etc/systemd/system/neurhomia-firstboot.service
       content: |
         [Unit]
-        Description=${PROJECT_NAME} First Boot Configuration
+        Description=NeurHomIA First Boot Configuration
         After=network-online.target
         Wants=network-online.target
 
         [Service]
         Type=oneshot
         RemainAfterExit=yes
-        ExecStart=/opt/${PROJECT_NAME_LOWER}/run-firstboot.sh
+        ExecStart=/opt/neurhomia/run-firstboot.sh
         StandardOutput=journal+console
 
         [Install]
         WantedBy=multi-user.target
   late-commands:
-    # Création du dossier et journal d'installation
-    - curtin in-target -- mkdir -p /var/log/installer
-    - curtin in-target -- sh -c 'echo "=== Début autoinstall $(date) ===" >> /var/log/installer/autoinstall.log'
-    - curtin in-target -- sh -c 'echo "Téléchargement de firstboot.sh depuis $FIRSTBOOT_SCRIPT_URL" >> /var/log/installer/autoinstall.log'
-    # Téléchargement du script principal
-    - curtin in-target -- mkdir -p /opt/${PROJECT_NAME_LOWER}
-    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
-    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
-    - curtin in-target -- sh -c 'echo "Téléchargement terminé" >> /var/log/installer/autoinstall.log'
-    # Activation du service
-    - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
-    - curtin in-target -- sh -c 'echo "Service ${PROJECT_NAME_LOWER}-firstboot.service activé" >> /var/log/installer/autoinstall.log'
-    - curtin in-target -- sh -c 'echo "=== Fin autoinstall $(date) ===" >> /var/log/installer/autoinstall.log'
+    - curtin in-target -- systemctl enable neurhomia-firstboot.service
   shutdown: reboot
 EOF
 
