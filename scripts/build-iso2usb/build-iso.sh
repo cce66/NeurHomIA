@@ -367,84 +367,82 @@ EOF
         exit 1
     fi
     
-    # Vérifier si python3 et yaml sont disponibles
-    if command -v python3 &>/dev/null; then
-        # Vérifier si le module yaml est installé
-        if python3 -c "import yaml" 2>/dev/null; then
-            echo -e "${CYAN}   Validation avec Python/yaml...${NC}"
-            if python3 -c "
-import yaml
-import sys
-
-try:
-    with open('$user_data_file', 'r', encoding='utf-8') as f:
-        content = f.read()
-        # Remplacer les variables shell par des valeurs factices pour la validation
-        content = content.replace('\${PROJECT_NAME_LOWER}', 'test')
-        content = content.replace('\${PROJECT_NAME}', 'Test')
-        content = content.replace('\${PROJECT_NAME_UPPER}', 'TEST')
-        content = content.replace('\$USERNAME', 'testuser')
-        content = content.replace('\$PASSWORD_HASH', 'testhash')
-        content = content.replace('\$FIRSTBOOT_SCRIPT_URL', 'http://example.com/test.sh')
-        
-        yaml.safe_load(content)
-    except yaml.YAMLError as e:
-        print(f'Erreur YAML: {e}')
-        sys.exit(1)
-    except Exception as e:
-        print(f'Erreur: {e}')
-        sys.exit(1)
-" 2>&1; then
-                echo -e "${GREEN}   ✅ Syntaxe YAML valide !${NC}"
-                return 0
-            else
-                echo -e "${RED}   ❌ Erreur de syntaxe YAML détectée !${NC}"
-                echo -e "${YELLOW}   Voici les 10 premières lignes du fichier pour vérification :${NC}"
-                head -20 "$user_data_file"
-                exit 1
-            fi
-        else
-            echo -e "${YELLOW}   ⚠ Module python3-yaml non installé. Installation en cours...${NC}"
-            apt-get update -qq && apt-get install -y python3-yaml 2>/dev/null
-            if python3 -c "import yaml" 2>/dev/null; then
-                echo -e "${GREEN}   Module installé. Nouvelle tentative de validation...${NC}"
-                # Rappeler la fonction récursivement après installation
-                if python3 -c "
-import yaml
-import sys
-
-try:
-    with open('$user_data_file', 'r', encoding='utf-8') as f:
-        content = f.read()
-        # Remplacer les variables shell par des valeurs factices pour la validation
-        content = content.replace('\${PROJECT_NAME_LOWER}', 'test')
-        content = content.replace('\${PROJECT_NAME}', 'Test')
-        content = content.replace('\${PROJECT_NAME_UPPER}', 'TEST')
-        content = content.replace('\$USERNAME', 'testuser')
-        content = content.replace('\$PASSWORD_HASH', 'testhash')
-        content = content.replace('\$FIRSTBOOT_SCRIPT_URL', 'http://example.com/test.sh')
-        
-        yaml.safe_load(content)
-    except yaml.YAMLError as e:
-        print(f'Erreur YAML: {e}')
-        sys.exit(1)
-" 2>&1; then
-                    echo -e "${GREEN}   ✅ Syntaxe YAML valide !${NC}"
-                    return 0
-                else
-                    echo -e "${RED}   ❌ Erreur de syntaxe YAML détectée !${NC}"
-                    exit 1
-                fi
-            else
-                echo -e "${RED}   ❌ Impossible d'installer python3-yaml. Validation impossible.${NC}"
-                echo -e "${YELLOW}   Poursuite quand même (risque d'erreur lors de l'installation).${NC}"
-                return 1
-            fi
-        fi
-    else
+    # Vérifier si python3 est disponible
+    if ! command -v python3 &>/dev/null; then
         echo -e "${YELLOW}   ⚠ Python3 non installé. Impossible de valider la syntaxe YAML.${NC}"
         echo -e "${YELLOW}   Installez python3-yaml pour bénéficier de la validation.${NC}"
         return 1
+    fi
+    
+    # Vérifier si le module yaml est installé
+    if ! python3 -c "import yaml" 2>/dev/null; then
+        echo -e "${YELLOW}   ⚠ Module python3-yaml non installé. Installation en cours...${NC}"
+        apt-get update -qq && apt-get install -y python3-yaml 2>/dev/null
+        if ! python3 -c "import yaml" 2>/dev/null; then
+            echo -e "${RED}   ❌ Impossible d'installer python3-yaml. Validation impossible.${NC}"
+            echo -e "${YELLOW}   Poursuite quand même (risque d'erreur lors de l'installation).${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}   Module installé.${NC}"
+    fi
+    
+    echo -e "${CYAN}   Validation avec Python/yaml...${NC}"
+    
+    # Créer un script Python temporaire
+    local tmp_script=$(mktemp /tmp/validate-yaml.XXXXXX.py)
+    
+    cat > "$tmp_script" <<'PYEOF'
+import yaml
+import sys
+import re
+
+filepath = sys.argv[1]
+
+# Lire le contenu du fichier
+with open(filepath, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Remplacer les variables shell par des valeurs factices pour la validation
+content = re.sub(r'\$\{PROJECT_NAME_LOWER\}', 'test', content)
+content = re.sub(r'\$\{PROJECT_NAME\}', 'Test', content)
+content = re.sub(r'\$\{PROJECT_NAME_UPPER\}', 'TEST', content)
+content = re.sub(r'\$USERNAME', 'testuser', content)
+content = re.sub(r'\$PASSWORD_HASH', 'testhash', content)
+content = re.sub(r'\$FIRSTBOOT_SCRIPT_URL', 'http://example.com/test.sh', content)
+
+try:
+    data = yaml.safe_load(content)
+    # Vérification additionnelle : le contenu doit être un dictionnaire
+    if not isinstance(data, dict):
+        print("Erreur : le fichier YAML ne contient pas un dictionnaire à la racine")
+        sys.exit(1)
+except yaml.YAMLError as e:
+    print(f"Erreur YAML: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Erreur: {e}")
+    sys.exit(1)
+
+print("OK")
+sys.exit(0)
+PYEOF
+
+    # Lancer le script et capturer la sortie
+    local output
+    output=$(python3 "$tmp_script" "$user_data_file" 2>&1)
+    local ret=$?
+    
+    if [ $ret -eq 0 ] && echo "$output" | grep -q "OK"; then
+        echo -e "${GREEN}   ✅ Syntaxe YAML valide !${NC}"
+        rm -f "$tmp_script"
+        return 0
+    else
+        echo -e "${RED}   ❌ Erreur de syntaxe YAML détectée !${NC}"
+        echo "$output"
+        echo -e "${YELLOW}   Voici les 20 premières lignes du fichier pour vérification :${NC}"
+        head -20 "$user_data_file"
+        rm -f "$tmp_script"
+        exit 1
     fi
 }
 
