@@ -456,7 +456,7 @@ PYEOF
         AUTOINSTALL_ENTRY=$(cat <<EOF
 menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
-    linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ ---
+    linux /casper/vmlinuz autoinstall ds=nocloud;s=/cdrom/autoinstall/ --- autoinstall debug
     initrd /casper/initrd
 }
 EOF
