@@ -355,6 +355,99 @@ EOF
     echo -e "${GREEN}   Fichiers d'autoinstall créés avec succès.${NC}"
 }
 
+# 8.5) Validation du fichier user-data (YAML)
+08_validate_yaml() {
+    echo ""
+    echo -e "${YELLOW}8.5) Validation de la syntaxe YAML du fichier user-data...${NC}"
+    
+    local user_data_file="$AUTOINSTALL_DIR/user-data"
+    
+    if [ ! -f "$user_data_file" ]; then
+        echo -e "${RED}   Fichier user-data introuvable !${NC}"
+        exit 1
+    fi
+    
+    # Vérifier si python3 et yaml sont disponibles
+    if command -v python3 &>/dev/null; then
+        # Vérifier si le module yaml est installé
+        if python3 -c "import yaml" 2>/dev/null; then
+            echo -e "${CYAN}   Validation avec Python/yaml...${NC}"
+            if python3 -c "
+import yaml
+import sys
+
+try:
+    with open('$user_data_file', 'r', encoding='utf-8') as f:
+        content = f.read()
+        # Remplacer les variables shell par des valeurs factices pour la validation
+        content = content.replace('\${PROJECT_NAME_LOWER}', 'test')
+        content = content.replace('\${PROJECT_NAME}', 'Test')
+        content = content.replace('\${PROJECT_NAME_UPPER}', 'TEST')
+        content = content.replace('\$USERNAME', 'testuser')
+        content = content.replace('\$PASSWORD_HASH', 'testhash')
+        content = content.replace('\$FIRSTBOOT_SCRIPT_URL', 'http://example.com/test.sh')
+        
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        print(f'Erreur YAML: {e}')
+        sys.exit(1)
+    except Exception as e:
+        print(f'Erreur: {e}')
+        sys.exit(1)
+" 2>&1; then
+                echo -e "${GREEN}   ✅ Syntaxe YAML valide !${NC}"
+                return 0
+            else
+                echo -e "${RED}   ❌ Erreur de syntaxe YAML détectée !${NC}"
+                echo -e "${YELLOW}   Voici les 10 premières lignes du fichier pour vérification :${NC}"
+                head -20 "$user_data_file"
+                exit 1
+            fi
+        else
+            echo -e "${YELLOW}   ⚠ Module python3-yaml non installé. Installation en cours...${NC}"
+            apt-get update -qq && apt-get install -y python3-yaml 2>/dev/null
+            if python3 -c "import yaml" 2>/dev/null; then
+                echo -e "${GREEN}   Module installé. Nouvelle tentative de validation...${NC}"
+                # Rappeler la fonction récursivement après installation
+                if python3 -c "
+import yaml
+import sys
+
+try:
+    with open('$user_data_file', 'r', encoding='utf-8') as f:
+        content = f.read()
+        # Remplacer les variables shell par des valeurs factices pour la validation
+        content = content.replace('\${PROJECT_NAME_LOWER}', 'test')
+        content = content.replace('\${PROJECT_NAME}', 'Test')
+        content = content.replace('\${PROJECT_NAME_UPPER}', 'TEST')
+        content = content.replace('\$USERNAME', 'testuser')
+        content = content.replace('\$PASSWORD_HASH', 'testhash')
+        content = content.replace('\$FIRSTBOOT_SCRIPT_URL', 'http://example.com/test.sh')
+        
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        print(f'Erreur YAML: {e}')
+        sys.exit(1)
+" 2>&1; then
+                    echo -e "${GREEN}   ✅ Syntaxe YAML valide !${NC}"
+                    return 0
+                else
+                    echo -e "${RED}   ❌ Erreur de syntaxe YAML détectée !${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${RED}   ❌ Impossible d'installer python3-yaml. Validation impossible.${NC}"
+                echo -e "${YELLOW}   Poursuite quand même (risque d'erreur lors de l'installation).${NC}"
+                return 1
+            fi
+        fi
+    else
+        echo -e "${YELLOW}   ⚠ Python3 non installé. Impossible de valider la syntaxe YAML.${NC}"
+        echo -e "${YELLOW}   Installez python3-yaml pour bénéficier de la validation.${NC}"
+        return 1
+    fi
+}
+
 # 9) Intégration de l'autoinstall dans l'ISO extraite
 09_integrate_autoinstall() {
     cp -r "$AUTOINSTALL_DIR" "$EXTRACT_DIR/"
@@ -808,6 +901,7 @@ main() {
     06_extract_iso
     07_generate_password_hash
     08_create_autoinstall_files
+    08_validate_yaml
     09_integrate_autoinstall
     10_modify_grub_cfg
     11_create_iso
