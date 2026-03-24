@@ -274,67 +274,10 @@ autoinstall:
   locale: fr_FR.UTF-8
   keyboard:
     layout: fr
-  network:
-    network:
-      version: 2
-      ethernets:
-        all-eth:
-          match:
-            name: "en*"
-          dhcp4: true
-          optional: true
-  storage:
-    layout:
-      name: lvm
   identity:
-    hostname: neurhomia-box
-    username: neurhomia
-    password: "$6$J7J8jrA6cmgAoB1E$We79gw5JNBzzeef9ZVN9kPenE6OEkWNzSpLJcUGfhqYhas3yU4QAKArTVOjkksYqAF4gzItSzU6P1hTv6lRaF/"
-  ssh:
-    install-server: true
-    allow-pw: true
-  packages:
-    - docker.io
-    - docker-compose-plugin
-    - ufw
-    - git
-    - whiptail
-    - curl
-    - language-pack-fr
-    - language-pack-fr-base
-    - wfrench
-  write_files:
-    - path: /opt/neurhomia/firstboot.sh
-      permissions: '0755'
-      content: |
-        #!/bin/bash
-        # Copier ici tout le contenu de firstboot-config.sh
-        echo "NeurHomIA - Premier lancement" > /var/log/firstboot.log
-    - path: /opt/neurhomia/run-firstboot.sh
-      permissions: '0755'
-      content: |
-        #!/bin/bash
-        exec > /var/log/firstboot.log 2>&1
-        echo "=== Début du premier lancement : $(date) ==="
-        /opt/neurhomia/firstboot.sh
-        echo "=== Fin du premier lancement : $(date) ==="
-    - path: /etc/systemd/system/neurhomia-firstboot.service
-      content: |
-        [Unit]
-        Description=NeurHomIA First Boot Configuration
-        After=network-online.target
-        Wants=network-online.target
-
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        ExecStart=/opt/neurhomia/run-firstboot.sh
-        StandardOutput=journal+console
-
-        [Install]
-        WantedBy=multi-user.target
-  late-commands:
-    - curtin in-target -- systemctl enable neurhomia-firstboot.service
+    hostname: test
+    username: test
+    password: "$6$rounds=4096$test$test"
   shutdown: reboot
 EOF
 
