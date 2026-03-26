@@ -273,10 +273,7 @@ PASSWORD_HASH=""
     echo -e "${GREEN}   Hash généré.${NC}"
 }
 
-# 8) Création du fichier user-data
-08_create_autoinstall_files() {
-    echo ""
-    echo -e "${YELLOW}8) Création du fichier user-data...${NC}"
+08_caf() {
     cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
 autoinstall:
@@ -292,6 +289,72 @@ autoinstall:
     - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
     - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
     - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
+  shutdown: reboot
+EOF
+}
+
+# 8) Création du fichier user-data
+08_create_autoinstall_files() {
+    echo ""
+    echo -e "${YELLOW}8) Création du fichier user-data...${NC}"
+
+cat > "$AUTOINSTALL_DIR/user-data" <<EOF
+#cloud-config
+autoinstall:
+  version: 1
+  locale: fr_FR.UTF-8
+  keyboard:
+    layout: fr
+  network:
+    network:
+      version: 2
+      ethernets:
+        all-eth:
+          match:
+            name: "en*"
+          dhcp4: true
+          optional: true
+  storage:
+    layout:
+      name: lvm
+  identity:
+    hostname: ${PROJECT_NAME_LOWER}-box
+    username: $USERNAME
+    password: "$PASSWORD_HASH"
+  ssh:
+    install-server: true
+    allow-pw: true
+  packages:
+    - docker.io
+    - docker-compose-plugin
+    - ufw
+    - git
+    - whiptail
+    - curl
+    - language-pack-fr          # Paquet de langue français
+    - language-pack-fr-base      # Paquet de base pour le français
+    - wfrench                    # Dictionnaire français (optionnel)
+  late-commands:
+    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
+    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
+    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
+    - |
+      cat <<'SERV' > /target/etc/systemd/system/${PROJECT_NAME_LOWER}-firstboot.service
+      [Unit]
+      Description=${PROJECT_NAME} First Boot Configuration
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/opt/${PROJECT_NAME_LOWER}/firstboot.sh
+      StandardOutput=journal+console
+
+      [Install]
+      WantedBy=multi-user.target
+      SERV
+    - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
   shutdown: reboot
 EOF
 
