@@ -6,31 +6,44 @@ set -e
 clear
 
 # ------------------------------
-# Couleurs pour l'affichage
+# Paramètres personnalisables du Projet
 # ------------------------------
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
 
-# ------------------------------
-# Paramètres personnalisables
-# ------------------------------
+# Nom du projet (utilisé pour hostname, dossier, label)
+PROJECT_NAME="NeurHomIA"                
+
+# Propriétaire du github
+GITHUB_OWNER_NAME="cce66"
+
+# Version par défaut d'Ubuntu Server
 DEFAULT_UBUNTU_VERSION="24.04.4"
 
-PROJECT_NAME="NeurHomIA"                # Nom du projet (utilisé pour hostname, dossier, label)
+# ------------------------------
+# Autres Paramètres personnalisables
+# ------------------------------
+
+# Mise en forme des variables
 PROJECT_NAME_LOWER=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
 PROJECT_NAME_UPPER=$(echo "$PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
 
-USERNAME="neurhomia"                    # Nom de l'utilisateur système
-DEFAULT_PASSWORD="neurhomia"            # Mot de passe par défaut (sera hashé)
+# Nom de l'utilisateur système
+USERNAME="${PROJECT_NAME_LOWER}"
 
-GITHUB_OWNER_NAME="cce66"               # Propriétaire du github
-FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"
+# Mot de passe par défaut (sera hashé)
+DEFAULT_PASSWORD="${PROJECT_NAME_LOWER}"            
+
+# URL du gihub
+GITHUB_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/build-iso2usb"
+
+# URL du template firstboot.sh sur GitHub
+GITHUB_URL_FIRSTBOOT_SCRIPT="${GITHUB_URL}/scripts/firstboot.sh"
 
 # URL du dossier autoinstall sur GitHub (contenant user-data.template et meta-data)
-GITHUB_AUTOINSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/autoinstall"
+GITHUB_URL_AUTOINSTALL_DIR="${GITHUB_URL}/autoinstall"
+
+# URL du template grub.cfg sur GitHub
+GITHUB_URL_GRUB_CFG_TEMPLATE="${GITHUB_URL}/boot/grub/grub.cfg.template"
+
 
 # ------------------------------
 # Variables globales
@@ -43,20 +56,28 @@ ISO_FILENAME=""
 ISO_URL=""
 EXTRACT_DIR=""
 AUTOINSTALL_DIR=""
-AUTOINSTALL_TEMPLATE_DIR=""   # Sera défini après WORK_DIR
+AUTOINSTALL_TEMPLATE_DIR=""
 OUTPUT_ISO=""
 LABEL=""
 PASSWORD_HASH=""
 
 # ------------------------------
+# Couleurs pour l'affichage
+# ------------------------------
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# ------------------------------
 # Fonctions
 # ------------------------------
 
-# Demande le mot de passe sudo
+# Demande le mot de passe sudo au cas ou le script n'a pas été lancé avec sudo 
 000_ask_sudo_password() {
-    read -sp "Entrez le mot de passe pour la commande sudo : " SUDO_PASSWORD
-    echo >&2
-    echo >&2
+  read -sp "Entrez le mot de passe pour la commande sudo : " SUDO_PASSWORD
+  echo >&2
 }
 
 # Traitement de l'option --noforce
@@ -499,13 +520,39 @@ PYEOF
 # 10) Modification du fichier grub.cfg pour forcer l'autoinstall
 10_modify_grub_cfg() {
     echo ""
-    echo -e "${YELLOW}10) Ajout entrée GRUB Autoinstall...${NC}"
+    echo -e "${YELLOW}10) Configuration du menu GRUB...${NC}"
     GRUB_CFG="$EXTRACT_DIR/boot/grub/grub.cfg"
 
-    if [ -f "$GRUB_CFG" ]; then
-        cp "$GRUB_CFG" "$GRUB_CFG.orig"
+    if [ ! -f "$GRUB_CFG" ]; then
+        echo -e "${RED}   Fichier grub.cfg introuvable dans l'ISO extraite !${NC}"
+        exit 1
+    fi
 
-        # Créer l'entrée de menu avec substitution de variable (sans guillemets autour de EOF)
+    # Sauvegarde de l'original
+    cp "$GRUB_CFG" "$GRUB_CFG.orig"
+
+    # Téléchargement du template depuis GitHub
+    local TEMPLATE_DIR=$(mktemp -d)
+    local TEMPLATE_FILE="$TEMPLATE_DIR/grub.cfg.template"
+
+    echo -e "${CYAN}   Téléchargement du template GRUB depuis GitHub...${NC}"
+    wget -O "$TEMPLATE_FILE" "$GRUB_CFG_TEMPLATE_URL"
+    WGET_RET=$?
+
+    if [ $WGET_RET -eq 0 ] && [ -f "$TEMPLATE_FILE" ]; then
+        echo -e "${GREEN}   Template téléchargé avec succès. Personnalisation...${NC}"
+        
+        # Personnalisation du template avec les variables du projet
+        sed -e "s|__PROJECT_NAME__|${PROJECT_NAME}|g" \
+            -e "s|__PROJECT_LOWER__|${PROJECT_NAME_LOWER}|g" \
+            -e "s|__PROJECT_UPPER__|${PROJECT_NAME_UPPER}|g" \
+            "$TEMPLATE_FILE" > "$GRUB_CFG"
+
+        echo -e "${GREEN}   GRUB configuré avec le template personnalisé.${NC}"
+    else
+        echo -e "${YELLOW}   Impossible de télécharger le template GRUB. Utilisation de la configuration par défaut...${NC}"
+        
+        # Fallback : génération locale de l'entrée autoinstall
         AUTOINSTALL_ENTRY=$(cat <<EOF
 menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
     set gfxpayload=keep
@@ -514,7 +561,6 @@ menuentry "Autoinstall Ubuntu Server $PROJECT_NAME" {
 }
 EOF
 )
-
         # Ajouter l'entrée en première position
         awk -v entry="$AUTOINSTALL_ENTRY" '
         BEGIN {added=0}
@@ -526,37 +572,36 @@ EOF
         ' "$GRUB_CFG" > "$GRUB_CFG.new"
         mv "$GRUB_CFG.new" "$GRUB_CFG"
 
-        # Supprimer les éventuelles lignes set default et set timeout existantes
+        # Supprimer les lignes set default et set timeout existantes
         sed -i '/^set default=/d' "$GRUB_CFG"
         sed -i '/^set timeout=/d' "$GRUB_CFG"
 
-        # Ajouter les lignes en début de fichier (avant tout menuentry)
+        # Ajouter les lignes en début de fichier
         {
             echo "set default=0"
             echo "set timeout=10"
             cat "$GRUB_CFG"
         } > "$GRUB_CFG.tmp"
         mv "$GRUB_CFG.tmp" "$GRUB_CFG"
+        
+        echo -e "${GREEN}   Entrée autoinstall ajoutée localement.${NC}"
+    fi
 
-        # Vérification
-        if grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
-            echo -e "${GREEN}   Entrée Autoinstall ajoutée avec succès.${NC}"
-        else
-            echo -e "${RED}   ERREUR : ajout échoué.${NC}"
-            exit 1
-        fi
-
-        # Copier vers les répertoires UEFI pour garantir le timeout en mode UEFI
-        for uefi_dir in "$EXTRACT_DIR/EFI/BOOT" "$EXTRACT_DIR/EFI/ubuntu"; do
-            mkdir -p "$uefi_dir"
-            cp "$GRUB_CFG" "$uefi_dir/grub.cfg"
-            echo -e "${GREEN}   Copie vers $uefi_dir/grub.cfg${NC}"
-        done
-
-    else
-        echo -e "${RED}   Fichier grub.cfg introuvable ! L'autoinstall pourrait ne pas fonctionner.${NC}"
+    # Vérification que l'entrée autoinstall est présente
+    if ! grep -q "Autoinstall Ubuntu Server" "$GRUB_CFG"; then
+        echo -e "${RED}   ERREUR : L'entrée autoinstall n'a pas été ajoutée.${NC}"
         exit 1
     fi
+
+    # Copie vers les répertoires UEFI
+    for uefi_dir in "$EXTRACT_DIR/EFI/BOOT" "$EXTRACT_DIR/EFI/ubuntu"; do
+        mkdir -p "$uefi_dir"
+        cp "$GRUB_CFG" "$uefi_dir/grub.cfg"
+        echo -e "${GREEN}   Copie vers $uefi_dir/grub.cfg${NC}"
+    done
+
+    # Nettoyage
+    rm -rf "$TEMPLATE_DIR"
 }
 
 # 11) Création de l'ISO avec xorriso (détection automatique)
@@ -954,8 +999,10 @@ trap cleanup EXIT
 # Exécution principale
 # ------------------------------
 main() {
+    
     001_parse_arguments "$@"
     002_setup_work_dir
+    
     01_ask_ubuntu_version
     02_validate_firstboot_script
     03_check_dependencies
@@ -971,7 +1018,7 @@ main() {
     12_validate_iso "$OUTPUT_ISO"
     13_burn_iso "$OUTPUT_ISO"
 
-    # Conseils pour vérification manuelle (optionnel)
+    # Conseils pour vérification manuelle
     echo -e "${YELLOW}"
     echo -e "========================================"
     echo -e "Pour vérifier la présence du dossier autoinstall sur la clé, vous pouvez monter sa première partition avec la commande :"
@@ -979,6 +1026,7 @@ main() {
     echo -e "(Remplacez 'sdX' par le périphérique de votre clé, par exemple sdb)"
     echo -e "========================================${NC}"
 
+    # Installation terminée
     echo -e "${GREEN}"
     echo -e "========================================"
     echo -e "Processus terminé."
