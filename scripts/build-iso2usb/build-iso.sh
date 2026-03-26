@@ -288,6 +288,10 @@ autoinstall:
     hostname: test
     username: test
     password: "$6$rounds=4096$test$test"
+ late-commands:
+    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
+    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
+    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
   shutdown: reboot
 EOF
 
