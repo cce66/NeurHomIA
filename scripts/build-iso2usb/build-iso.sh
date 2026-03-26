@@ -33,6 +33,7 @@ FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${P
 # Variables globales
 # ------------------------------
 FORCE_BUILD=true
+SUDO_PASSWORD=""
 WORK_DIR=""
 ISO_VERSION=""
 ISO_FILENAME=""
@@ -47,8 +48,15 @@ PASSWORD_HASH=""
 # Fonctions
 # ------------------------------
 
+# Demande le mot de passe sudo
+000_ask_sudo_password() {
+    read -sp "Entrez le mot de passe pour la commande sudo : " SUDO_PASSWORD
+    echo >&2  # saute une ligne pour la présentation
+    # Le mot de passe est maintenant dans la variable $SUDO_PASSWORD
+}
+
 # Traitement de l'option --noforce
-000_parse_arguments() {
+001_parse_arguments() {
     if [[ "${1:-}" == "--noforce" ]]; then
         FORCE_BUILD=false
     fi
@@ -61,6 +69,7 @@ PASSWORD_HASH=""
         REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
         WORK_DIR="$REAL_HOME/${PROJECT_NAME_LOWER}-key"
     else
+        000_ask_sudo_password
         WORK_DIR="$HOME/${PROJECT_NAME_LOWER}-key"
     fi
     mkdir -p "$WORK_DIR"
@@ -558,7 +567,8 @@ EOF
     mkdir -p "$mount_dir"
     if ! mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
         # Fallback : essayer avec sudo
-        if ! sudo mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
+        # if ! sudo mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
+        echo "$SUDO_PASSWORD" | sudo -S mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null
             echo -e "  ${YELLOW}⚠ Impossible de monter l'ISO pour validation (droits insuffisants).${NC}"
             echo -e "  ${YELLOW}  Vérification par taille et checksum uniquement.${NC}"
             
@@ -836,8 +846,8 @@ EOF
 # Exécution principale
 # ------------------------------
 main() {
-    000_parse_arguments "$@"
-    001_setup_work_dir
+    001_parse_arguments "$@"
+    002_setup_work_dir
     01_ask_ubuntu_version
     02_validate_firstboot_script
     03_check_dependencies
