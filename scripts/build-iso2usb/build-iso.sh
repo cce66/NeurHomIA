@@ -63,7 +63,7 @@ PASSWORD_HASH=""
 }
 
 # Déterminer le répertoire de travail (même avec sudo)
-001_setup_work_dir() {
+002_setup_work_dir() {
     if [ -n "$SUDO_USER" ]; then
         REAL_USER="$SUDO_USER"
         REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
