@@ -1,6 +1,6 @@
 #!/bin/bash
 # build-iso.sh – Construction de l'ISO d'installation automatique d'Ubuntu Server et NeurHomIA
-# Utilisation : ./build-iso.sh [--force]
+# Utilisation : ./build-iso.sh [--noforce]
 
 set -e
 clear
@@ -26,8 +26,11 @@ PROJECT_NAME_UPPER=$(echo "$PROJECT_NAME" | tr '[:lower:]' '[:upper:]')
 USERNAME="neurhomia"                    # Nom de l'utilisateur système
 DEFAULT_PASSWORD="neurhomia"            # Mot de passe par défaut (sera hashé)
 
-GITHUB_OWNER_NAME="cce66"            # Propriétaire du github 
-FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"  
+GITHUB_OWNER_NAME="cce66"               # Propriétaire du github
+FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"
+
+# URL du dossier autoinstall sur GitHub (contenant user-data.template et meta-data)
+GITHUB_AUTOINSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/autoinstall"
 
 # ------------------------------
 # Variables globales
@@ -40,6 +43,7 @@ ISO_FILENAME=""
 ISO_URL=""
 EXTRACT_DIR=""
 AUTOINSTALL_DIR=""
+AUTOINSTALL_TEMPLATE_DIR=""   # Sera défini après WORK_DIR
 OUTPUT_ISO=""
 LABEL=""
 PASSWORD_HASH=""
@@ -51,9 +55,8 @@ PASSWORD_HASH=""
 # Demande le mot de passe sudo
 000_ask_sudo_password() {
     read -sp "Entrez le mot de passe pour la commande sudo : " SUDO_PASSWORD
-    echo >&2  # saute une ligne pour la présentation
-    echo >&2  # saute une ligne pour la présentation
-    # Le mot de passe est maintenant dans la variable $SUDO_PASSWORD
+    echo >&2
+    echo >&2
 }
 
 # Traitement de l'option --noforce
@@ -74,6 +77,8 @@ PASSWORD_HASH=""
         WORK_DIR="$HOME/${PROJECT_NAME_LOWER}-key"
     fi
     mkdir -p "$WORK_DIR"
+    # Définir le dossier temporaire pour les templates autoinstall
+    AUTOINSTALL_TEMPLATE_DIR="$WORK_DIR/autoinstall_template"
 }
 
 # 1) Demande interactive de la version d'Ubuntu Server à installer
@@ -273,9 +278,44 @@ PASSWORD_HASH=""
     echo -e "${GREEN}   Hash généré.${NC}"
 }
 
-08_caf() {
-    cat > "$AUTOINSTALL_DIR/user-data" <<EOF
+# 8) Création des fichiers d'autoinstall (téléchargement depuis GitHub ou fallback local)
+08_create_autoinstall_files() {
+    echo ""
+    echo -e "${YELLOW}8) Création des fichiers d'autoinstall...${NC}"
 
+    # Création du dossier temporaire pour les templates
+    rm -rf "$AUTOINSTALL_TEMPLATE_DIR"
+    mkdir -p "$AUTOINSTALL_TEMPLATE_DIR"
+
+    # Téléchargement des fichiers depuis GitHub
+    echo -e "${CYAN}   Téléchargement des templates depuis GitHub...${NC}"
+    wget -q -O "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" "${GITHUB_AUTOINSTALL_URL}/user-data.template"
+    wget -q -O "$AUTOINSTALL_TEMPLATE_DIR/meta-data" "${GITHUB_AUTOINSTALL_URL}/meta-data"
+
+    if [ -f "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" ]; then
+        echo -e "${GREEN}   Templates téléchargés avec succès. Personnalisation en cours...${NC}"
+        
+        # Personnalisation avec sed (remplacement des placeholders)
+        sed -e "s|__HOSTNAME__|${PROJECT_NAME_LOWER}-box|g" \
+            -e "s|__USERNAME__|${USERNAME}|g" \
+            -e "s|__PASSWORD_HASH__|${PASSWORD_HASH}|g" \
+            -e "s|__PROJECT_LOWER__|${PROJECT_NAME_LOWER}|g" \
+            -e "s|__PROJECT_NAME__|${PROJECT_NAME}|g" \
+            -e "s|__FIRSTBOOT_URL__|${FIRSTBOOT_SCRIPT_URL}|g" \
+            "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" > "$AUTOINSTALL_DIR/user-data"
+
+        cp "$AUTOINSTALL_TEMPLATE_DIR/meta-data" "$AUTOINSTALL_DIR/"
+
+        # Vérification
+        if [ ! -f "$AUTOINSTALL_DIR/user-data" ] || [ ! -f "$AUTOINSTALL_DIR/meta-data" ]; then
+            echo -e "${RED}   Erreur : échec de la copie des fichiers personnalisés.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}   Fichiers d'autoinstall personnalisés et prêts.${NC}"
+    else
+        echo -e "${YELLOW}   Impossible de télécharger les templates depuis GitHub. Utilisation de la génération locale...${NC}"
+        # Fallback : génération locale (ancienne méthode)
+        cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
 autoinstall:
   version: 1
@@ -308,9 +348,9 @@ autoinstall:
     - git
     - whiptail
     - curl
-    - language-pack-fr          # Paquet de langue français
-    - language-pack-fr-base      # Paquet de base pour le français
-    - wfrench                    # Dictionnaire français (optionnel)
+    - language-pack-fr
+    - language-pack-fr-base
+    - wfrench
   late-commands:
     - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
     - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
@@ -334,38 +374,17 @@ autoinstall:
     - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
   shutdown: reboot
 EOF
-}
+        touch "$AUTOINSTALL_DIR/meta-data"
+        echo -e "${GREEN}   Fichiers d'autoinstall générés localement.${NC}"
+    fi
 
-# 8) Création du fichier user-data
-08_create_autoinstall_files() {
-    echo ""
-    echo -e "${YELLOW}8) Création du fichier user-data...${NC}"
-
-cat > "$AUTOINSTALL_DIR/user-data" <<EOF
-#cloud-config
-autoinstall:
-  version: 1
-  locale: fr_FR.UTF-8
-  keyboard:
-    layout: fr
-  identity:
-    hostname: test
-    username: test
-    password: "$6$rounds=4096$test$test"
- late-commands:
-    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
-    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
-    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
-  shutdown: reboot
-EOF
-
-    touch "$AUTOINSTALL_DIR/meta-data"
+    # Nettoyage du dossier temporaire
+    rm -rf "$AUTOINSTALL_TEMPLATE_DIR"
 
     if [ ! -f "$AUTOINSTALL_DIR/user-data" ] || [ ! -f "$AUTOINSTALL_DIR/meta-data" ]; then
         echo -e "${RED}   Erreur : les fichiers d'autoinstall n'ont pas été créés correctement.${NC}"
         exit 1
     fi
-    echo -e "${GREEN}   Fichiers d'autoinstall créés avec succès.${NC}"
 }
 
 # 8.5) Validation du fichier user-data (YAML)
@@ -656,10 +675,6 @@ EOF
         fi
     fi
 
-
-# Nettoyage après usage (important !)
-unset SUDO_PASSWORD
-
     # 1. Vérifier autoinstall/user-data
     if [ -f "$mount_dir/autoinstall/user-data" ]; then
         echo -e "  ${GREEN}✔ autoinstall/user-data présent${NC}"
@@ -915,6 +930,14 @@ unset SUDO_PASSWORD
 }
 
 # ------------------------------
+# Nettoyage après usage (important !)
+# ------------------------------
+cleanup() {
+    unset SUDO_PASSWORD
+}
+trap cleanup EXIT
+
+# ------------------------------
 # Exécution principale
 # ------------------------------
 main() {
@@ -928,7 +951,7 @@ main() {
     06_extract_iso
     07_generate_password_hash
     08_create_autoinstall_files
-    # 08_validate_yaml
+    08_validate_yaml
     09_integrate_autoinstall
     10_modify_grub_cfg
     11_create_iso
