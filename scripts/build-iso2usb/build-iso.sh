@@ -286,13 +286,19 @@ PASSWORD_HASH=""
     # Création du dossier temporaire pour les templates
     rm -rf "$AUTOINSTALL_TEMPLATE_DIR"
     mkdir -p "$AUTOINSTALL_TEMPLATE_DIR"
+    if [ ! -d "$AUTOINSTALL_TEMPLATE_DIR" ]; then
+        echo -e "${RED}   Erreur : impossible de créer $AUTOINSTALL_TEMPLATE_DIR${NC}"
+        exit 1
+    fi
 
-    # Téléchargement des fichiers depuis GitHub
+    # Téléchargement des fichiers depuis GitHub (sans -q pour voir les erreurs)
     echo -e "${CYAN}   Téléchargement des templates depuis GitHub...${NC}"
-    wget -q -O "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" "${GITHUB_AUTOINSTALL_URL}/user-data.template"
-    wget -q -O "$AUTOINSTALL_TEMPLATE_DIR/meta-data" "${GITHUB_AUTOINSTALL_URL}/meta-data"
+    wget -O "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" "${GITHUB_AUTOINSTALL_URL}/user-data.template"
+    WGET1=$?
+    wget -O "$AUTOINSTALL_TEMPLATE_DIR/meta-data" "${GITHUB_AUTOINSTALL_URL}/meta-data"
+    WGET2=$?
 
-    if [ -f "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" ]; then
+    if [ $WGET1 -eq 0 ] && [ $WGET2 -eq 0 ] && [ -f "$AUTOINSTALL_TEMPLATE_DIR/user-data.template" ]; then
         echo -e "${GREEN}   Templates téléchargés avec succès. Personnalisation en cours...${NC}"
         
         # Personnalisation avec sed (remplacement des placeholders)
@@ -306,7 +312,6 @@ PASSWORD_HASH=""
 
         cp "$AUTOINSTALL_TEMPLATE_DIR/meta-data" "$AUTOINSTALL_DIR/"
 
-        # Vérification
         if [ ! -f "$AUTOINSTALL_DIR/user-data" ] || [ ! -f "$AUTOINSTALL_DIR/meta-data" ]; then
             echo -e "${RED}   Erreur : échec de la copie des fichiers personnalisés.${NC}"
             exit 1
@@ -314,8 +319,8 @@ PASSWORD_HASH=""
         echo -e "${GREEN}   Fichiers d'autoinstall personnalisés et prêts.${NC}"
     else
         echo -e "${YELLOW}   Impossible de télécharger les templates depuis GitHub. Utilisation de la génération locale...${NC}"
-        # Fallback : génération locale (ancienne méthode)
-        cat > "$AUTOINSTALL_DIR/user-data" <<EOF
+        # Fallback : génération locale
+        cat > "$AUTOINSTALL_DIR/user-data" <<'EOF'
 #cloud-config
 autoinstall:
   version: 1
@@ -335,9 +340,9 @@ autoinstall:
     layout:
       name: lvm
   identity:
-    hostname: ${PROJECT_NAME_LOWER}-box
-    username: $USERNAME
-    password: "$PASSWORD_HASH"
+    hostname: __HOSTNAME__
+    username: __USERNAME__
+    password: "__PASSWORD_HASH__"
   ssh:
     install-server: true
     allow-pw: true
@@ -352,28 +357,36 @@ autoinstall:
     - language-pack-fr-base
     - wfrench
   late-commands:
-    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
-    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
-    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
+    - mkdir -p /target/opt/__PROJECT_LOWER__
+    - curtin in-target -- wget -O /opt/__PROJECT_LOWER__/firstboot.sh __FIRSTBOOT_URL__
+    - curtin in-target -- chmod +x /opt/__PROJECT_LOWER__/firstboot.sh
     - |
-      cat <<'SERV' > /target/etc/systemd/system/${PROJECT_NAME_LOWER}-firstboot.service
+      cat <<'SERV' > /target/etc/systemd/system/__PROJECT_LOWER__-firstboot.service
       [Unit]
-      Description=${PROJECT_NAME} First Boot Configuration
+      Description=__PROJECT_NAME__ First Boot Configuration
       After=network-online.target
       Wants=network-online.target
 
       [Service]
       Type=oneshot
       RemainAfterExit=yes
-      ExecStart=/opt/${PROJECT_NAME_LOWER}/firstboot.sh
+      ExecStart=/opt/__PROJECT_LOWER__/firstboot.sh
       StandardOutput=journal+console
 
       [Install]
       WantedBy=multi-user.target
       SERV
-    - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
+    - curtin in-target -- systemctl enable __PROJECT_LOWER__-firstboot.service
   shutdown: reboot
 EOF
+        # Remplacer les placeholders dans le fichier local
+        sed -i -e "s|__HOSTNAME__|${PROJECT_NAME_LOWER}-box|g" \
+               -e "s|__USERNAME__|${USERNAME}|g" \
+               -e "s|__PASSWORD_HASH__|${PASSWORD_HASH}|g" \
+               -e "s|__PROJECT_LOWER__|${PROJECT_NAME_LOWER}|g" \
+               -e "s|__PROJECT_NAME__|${PROJECT_NAME}|g" \
+               -e "s|__FIRSTBOOT_URL__|${FIRSTBOOT_SCRIPT_URL}|g" \
+               "$AUTOINSTALL_DIR/user-data"
         touch "$AUTOINSTALL_DIR/meta-data"
         echo -e "${GREEN}   Fichiers d'autoinstall générés localement.${NC}"
     fi
@@ -385,9 +398,7 @@ EOF
         echo -e "${RED}   Erreur : les fichiers d'autoinstall n'ont pas été créés correctement.${NC}"
         exit 1
     fi
-}
-
-# 8.5) Validation du fichier user-data (YAML)
+}# 8.5) Validation du fichier user-data (YAML)
 08_validate_yaml() {
     echo ""
     echo -e "${YELLOW}8.5) Validation de la syntaxe YAML du fichier user-data...${NC}"
