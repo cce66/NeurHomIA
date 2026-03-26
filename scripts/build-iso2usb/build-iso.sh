@@ -566,13 +566,12 @@ EOF
     # Montage de l'ISO
     mkdir -p "$mount_dir"
     if ! mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
-        # Fallback : essayer avec sudo
-        # if ! sudo mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
-        if ! echo "${SUDO_PASSWORD}" | sudo -S mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
+        # Fallback avec sudo et mot de passe
+        if ! printf '%s\n' "$SUDO_PASSWORD" | sudo -S mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
             echo -e "  ${YELLOW}⚠ Impossible de monter l'ISO pour validation (droits insuffisants).${NC}"
             echo -e "  ${YELLOW}  Vérification par taille et checksum uniquement.${NC}"
             
-            # Vérification taille minimale (> 1 Go = 1073741824 octets)
+            # Vérification taille minimale (> 1 Go)
             local iso_bytes=$(stat -c%s "$iso_path" 2>/dev/null || stat -f%z "$iso_path" 2>/dev/null)
             if [ -n "$iso_bytes" ] && [ "$iso_bytes" -gt 1073741824 ]; then
                 echo -e "  ${GREEN}✔ Taille cohérente ($iso_bytes octets > 1 Go)${NC}"
@@ -587,6 +586,10 @@ EOF
             return
         fi
     fi
+
+
+# Nettoyage après usage (important !)
+unset SUDO_PASSWORD
 
     # 1. Vérifier autoinstall/user-data
     if [ -f "$mount_dir/autoinstall/user-data" ]; then
