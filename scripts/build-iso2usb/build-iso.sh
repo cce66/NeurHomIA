@@ -275,30 +275,7 @@ PASSWORD_HASH=""
 
 08_caf() {
     cat > "$AUTOINSTALL_DIR/user-data" <<EOF
-#cloud-config
-autoinstall:
-  version: 1
-  locale: fr_FR.UTF-8
-  keyboard:
-    layout: fr
-  identity:
-    hostname: test
-    username: test
-    password: "$6$rounds=4096$test$test"
- late-commands:
-    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
-    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
-    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
-  shutdown: reboot
-EOF
-}
 
-# 8) Création du fichier user-data
-08_create_autoinstall_files() {
-    echo ""
-    echo -e "${YELLOW}8) Création du fichier user-data...${NC}"
-
-cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
 autoinstall:
   version: 1
@@ -355,6 +332,30 @@ autoinstall:
       WantedBy=multi-user.target
       SERV
     - curtin in-target -- systemctl enable ${PROJECT_NAME_LOWER}-firstboot.service
+  shutdown: reboot
+EOF
+}
+
+# 8) Création du fichier user-data
+08_create_autoinstall_files() {
+    echo ""
+    echo -e "${YELLOW}8) Création du fichier user-data...${NC}"
+
+cat > "$AUTOINSTALL_DIR/user-data" <<EOF
+#cloud-config
+autoinstall:
+  version: 1
+  locale: fr_FR.UTF-8
+  keyboard:
+    layout: fr
+  identity:
+    hostname: test
+    username: test
+    password: "$6$rounds=4096$test$test"
+ late-commands:
+    - mkdir -p /target/opt/${PROJECT_NAME_LOWER}
+    - curtin in-target -- wget -O /opt/${PROJECT_NAME_LOWER}/firstboot.sh $FIRSTBOOT_SCRIPT_URL
+    - curtin in-target -- chmod +x /opt/${PROJECT_NAME_LOWER}/firstboot.sh
   shutdown: reboot
 EOF
 
