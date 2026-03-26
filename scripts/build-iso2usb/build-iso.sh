@@ -52,6 +52,7 @@ PASSWORD_HASH=""
 000_ask_sudo_password() {
     read -sp "Entrez le mot de passe pour la commande sudo : " SUDO_PASSWORD
     echo >&2  # saute une ligne pour la présentation
+    echo >&2  # saute une ligne pour la présentation
     # Le mot de passe est maintenant dans la variable $SUDO_PASSWORD
 }
 
@@ -63,7 +64,7 @@ PASSWORD_HASH=""
 }
 
 # Déterminer le répertoire de travail (même avec sudo)
-001_setup_work_dir() {
+002_setup_work_dir() {
     if [ -n "$SUDO_USER" ]; then
         REAL_USER="$SUDO_USER"
         REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
