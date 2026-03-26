@@ -30,7 +30,7 @@ GITHUB_OWNER_NAME="cce66"               # Propriétaire du github
 FIRSTBOOT_SCRIPT_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/firstboot-config.sh"
 
 # URL du dossier autoinstall sur GitHub (contenant user-data.template et meta-data)
-GITHUB_AUTOINSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/autoinstall"
+GITHUB_AUTOINSTALL_URL="https://raw.githubusercontent.com/${GITHUB_OWNER_NAME}/${PROJECT_NAME}/main/scripts/build-iso2usb/autoinstall"
 
 # ------------------------------
 # Variables globales
