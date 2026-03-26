@@ -398,7 +398,9 @@ EOF
         echo -e "${RED}   Erreur : les fichiers d'autoinstall n'ont pas été créés correctement.${NC}"
         exit 1
     fi
-}# 8.5) Validation du fichier user-data (YAML)
+}
+
+# 8.5) Validation du fichier user-data (YAML)
 08_validate_yaml() {
     echo ""
     echo -e "${YELLOW}8.5) Validation de la syntaxe YAML du fichier user-data...${NC}"
