@@ -568,7 +568,7 @@ EOF
     if ! mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
         # Fallback : essayer avec sudo
         # if ! sudo mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null; then
-        echo "$SUDO_PASSWORD" | sudo -S mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null
+        if ! echo "$SUDO_PASSWORD" | sudo -S mount -o loop,ro "$iso_path" "$mount_dir" 2>/dev/null then
             echo -e "  ${YELLOW}⚠ Impossible de monter l'ISO pour validation (droits insuffisants).${NC}"
             echo -e "  ${YELLOW}  Vérification par taille et checksum uniquement.${NC}"
             
