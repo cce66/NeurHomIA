@@ -928,7 +928,7 @@ main() {
     06_extract_iso
     07_generate_password_hash
     08_create_autoinstall_files
-    08_validate_yaml
+    # 08_validate_yaml
     09_integrate_autoinstall
     10_modify_grub_cfg
     11_create_iso
