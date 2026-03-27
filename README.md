@@ -1,156 +1,152 @@
 # 🚀 NeurHomIA — Construction d'ISO Ubuntu Server
 
-Génération automatisée d'une image ISO Ubuntu Server préconfigurée avec **autoinstall**, **LVM**, **Docker** et un script de première configuration exécuté au boot.
+> 🔥 Génération automatisée d'une ISO Ubuntu Server prête à l’emploi avec **autoinstall**, **LVM**, **Docker** et configuration post-install.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Ubuntu-24.04_LTS-E95420?logo=ubuntu&logoColor=white">
+  <img src="https://img.shields.io/badge/License-Apache_2.0-blue">
+  <img src="https://img.shields.io/badge/Boot-BIOS%20%2B%20UEFI-green">
+  <img src="https://img.shields.io/badge/Automation-100%25-success">
+</p>
 
 ---
 
-## 🏷️ Tags
+## 📚 Sommaire
 
-* Ubuntu 24.04 LTS
-* Apache 2.0 License
-* BIOS + UEFI
-* bash
-* xorriso
-* systemd
+* [✨ Fonctionnalités](#-fonctionnalités)
+* [⚡ Quick Start](#-quick-start)
+* [🧰 Prérequis](#-prérequis)
+* [🪜 Installation détaillée](#-installation-détaillée)
+* [⚙️ Fonctionnement du script](#-fonctionnement-du-script)
+* [💿 Gravure USB](#-gravure-usb)
+* [📁 Structure du dépôt](#-structure-du-dépôt)
+* [🧩 Placeholders](#-placeholders)
+* [🚀 Script firstboot](#-script-firstboot)
+* [⚙️ Options CLI](#-options-cli)
+* [🛠️ Dépannage](#-dépannage)
 
-✔️ ❌ ⭐ 💥 🔥 ⚡ 💿 💻🚀⬇️⚠️🏠🦿🔧👩🏻‍🔬🦾⚙️👁‍🗨 🤖 💾 🔐
+---
 
-## Téléchargement et exécution du script build-iso.sh
+## ✨ Fonctionnalités
 
-Ce guide explique comment télécharger le script build-iso.sh depuis GitHub, le rendre exécutable et l'exécuter.
-Prérequis
+* 🤖 Installation **100% automatisée** via autoinstall
+* 💾 Partitionnement **LVM prêt à l’emploi**
+* 🔐 Sécurisation automatique (**SSH, UFW, fail2ban**)
+* 📦 Installation de **Docker + outils essentiels**
+* ⚡ Script **firstboot exécuté via systemd**
+* 💿 ISO **hybride BIOS + UEFI**
 
+---
 
-### Prérequis
+## ⚡ Quick Start
 
-- Une machine Linux (Ubuntu 20.04/22.04/24.04 recommandée) avec :
-  - Connexion Internet (pour télécharger l’ISO Ubuntu et les fichiers GitHub)
-  - Au moins 6 Go d’espace disque libre
-  - Accès au terminal avec accès `sudo`
-  - Outil wget installé, il généralement préinstallé sur la plupart des distributionsn sinon l'installer avec :
-    ```bash
-    sudo apt update && sudo apt install wget -y
-    ```
-  - Paquets nécessaires (si un des paquest est absent, le script tente de l'installer automatiquement) :
-    `wget`, `p7zip-full`, `openssl`, `xorriso`, `squashfs-tools`, `schroot`, `rsync`, `syslinux-utils`, `isolinux`, `genisoimage`
- 
-----
-### 1. Créer le répertoire NeurHomIA-Key 📁
+```bash
+mkdir -p ~/NeurHomIA-Key
+wget -O ~/NeurHomIA-Key/build-iso.sh https://raw.githubusercontent.com/cce66/NeurHomIA/main/build-iso.sh
+chmod +x ~/NeurHomIA-Key/build-iso.sh
+cd ~/NeurHomIA-Key
+sudo bash build-iso.sh
+```
 
-Créez le répertoire NeurHomIA-Key dans votre dossier utilisateur (home) s'il n'existe pas déjà :
+---
+
+## 🧰 Prérequis
+
+* 💻 Ubuntu 20.04 / 22.04 / 24.04
+* 🌐 Connexion Internet
+* 💾 ~6 Go disque
+* 🔐 Accès sudo
+
+### 📦 Dépendances
+
+Installées automatiquement si absentes :
+
+```bash
+wget p7zip-full openssl xorriso squashfs-tools schroot rsync syslinux-utils isolinux genisoimage
+```
+
+---
+
+## 🪜 Installation détaillée
+
+### 1. 📁 Créer le répertoire
+
 ```bash
 mkdir -p ~/NeurHomIA-Key
 ```
 
-----
-### 2. Télécharger le script 📶 🔽 
+### 2. 📶 Télécharger le script
 
-Téléchargez le script build-iso.sh depuis GitHub en utilisant wget :
 ```bash
-wget -O ~/NeurHomIA-Key/build-iso.sh https://raw.githubusercontent.com/cce66//NeurHomIA/main/build-iso.sh
+wget -O ~/NeurHomIA-Key/build-iso.sh https://raw.githubusercontent.com/cce66/NeurHomIA/main/build-iso.sh
 ```
 
-💡 Note : Il est important d'utiliser l'URL raw.githubusercontent.com pour obtenir le contenu brut du script, et non la page GitHub standard.
+### 3. 🛠️ Rendre exécutable
 
-----
-### 3. Rendre le script exécutable  🛠️
-
-Donnez les permissions d'exécution au script :
 ```bash
 chmod +x ~/NeurHomIA-Key/build-iso.sh
 ```
 
-----
-### 4. Exécuter le script ▶️
-
-Exécutez le script depuis le répertoire NeurHomIA :
-```bash
-cd ~/NeurHomIa
-```
-
-Le script nécessite des privilèges administrateur, utilisez :
-```bash
-sudo bash ~/NeurHomIA/build-iso.sh
-```
-Si le script est lancé sans sudo il demande au démarrage le mot de passe sudo pour certaines commandes.
-
-----
-### 5. 🛠️ Exécution du script
-
-Le script demandera :
-- La version d’Ubuntu Server (ou Entrée pour la version par défaut)
-- Le mot de passe sudo (si le script n'a pas été lancé avec sudo)
-
-Il effectuera ensuite :
-1. La validation du script `firstboot.sh` (vérification des sections attendues).
-2. L’installation des dépendances manquantes.
-3. Le téléchargement de l’ISO Ubuntu (si elle n’est pas déjà présente).
-4. L’extraction de l’ISO.
-5. La génération du hash du mot de passe par défaut.
-6. Le téléchargement des templates autoinstall (`user-data.template`, `meta-data`) depuis GitHub, puis leur personnalisation (remplacement des placeholders).
-7. La validation de la syntaxe YAML du fichier `user-data` généré.
-8. L’injection des fichiers autoinstall dans l’ISO extraite.
-9. Le téléchargement du template GRUB (`grub.cfg.template`) depuis GitHub, sa personnalisation, et son remplacement dans l’ISO.
-10. La construction de l’ISO finale (hybride BIOS/UEFI).
-11. La validation de l’ISO (montage, vérification du contenu, SHA256).
-12. La proposition de graver l’ISO sur une clé USB.
-
-----
-### 6. Graver l’ISO sur une clé USB
-
-À la fin du script, vous pouvez choisir d’écrire l’ISO sur une clé USB.  
-Le script liste les périphériques détectés et demande confirmation.
-
-Si vous sautez cette étape, vous pouvez le faire manuellement :
+### 4. ▶️ Exécuter
 
 ```bash
-sudo dd if=~/neurhomia-key/neurhomia-server-24.04.4-auto.iso of=/dev/sdX bs=4M status=progress conv=fsync
+cd ~/NeurHomIA-Key
+sudo bash build-iso.sh
 ```
 
-Remplacez `/dev/sdX` par votre périphérique USB (ex. `/dev/sdb`). **Attention – cela effacera toutes les données sur le périphérique.**
+💡 Si lancé sans sudo, le script demandera le mot de passe lorsque nécessaire.
 
+---
 
+## ⚙️ Fonctionnement du script
 
-----
-###  📌 Notes importantes
-----
+Le script exécute les étapes suivantes :
 
-#### 1. 🔒 Sécurité : 
-Vérifiez toujours le contenu des scripts téléchargés depuis Internet avant de les exécuter.
+1. 🔍 Validation du script `firstboot.sh`
+2. 📦 Installation des dépendances
+3. 🌐 Téléchargement de l’ISO Ubuntu
+4. 📂 Extraction de l’ISO
+5. 🔐 Génération du hash mot de passe
+6. 🧩 Génération des fichiers autoinstall
+7. ✅ Validation YAML
+8. 💉 Injection dans l’ISO
+9. ⚙️ Configuration GRUB
+10. 💿 Construction ISO finale
+11. 🔎 Vérification SHA256
+12. 💽 Proposition de gravure USB
 
-#### 2. 📁 Structure du dépôt
+---
+
+## 💿 Gravure USB
+
+```bash
+sudo dd if=~/neurhomia-key/neurhomia-server-24.04.4-auto.iso \
+  of=/dev/sdX bs=4M status=progress conv=fsync
 ```
-.
-└── build-iso2usb/
-    ├── build-iso.sh                     # Script principal de construction
-    ├── autoinstall/                     # Fichiers modèles pour l’autoinstall
-    │   ├── user-data.template           # Template YAML avec des placeholders
-    │   └── meta-data                    # Optionnel (peut être vide)
-    ├── boot/                            # Fichiers de boot personnalisés
-    │   └── grub/
-    │       └── grub.cfg.template        # Template GRUB pour le menu autoinstall
-    └── scripts/
-        └── firstboot.sh                 # Script de première configuration
+
+⚠️ **Attention : destruction complète des données sur le disque cible**
+
+---
+
+## 📁 Structure du dépôt
+
+```text
+build-iso2usb/
+├── build-iso.sh
+├── autoinstall/
+│   ├── user-data.template
+│   └── meta-data
+├── boot/grub/
+│   └── grub.cfg.template
+└── scripts/
+    └── firstboot.sh
 ```
 
-#### 3. 🔄 Pipeline de construction
+---
 
-1. Choix version Ubuntu
-2. Validation `firstboot.sh`
-3. Installation dépendances
-4. Téléchargement ISO
-5. Génération hash mot de passe
-6. Templates autoinstall
-7. Validation YAML
-8. Injection dans ISO
-9. Template GRUB
-10. Build ISO (xorriso)
-11. Vérification SHA256
-12. Gravure USB (optionnelle)
+## 🧩 Placeholders
 
-### 4. 🧩 Placeholders
-
-#### autoinstall (`user-data.template`)
+### autoinstall
 
 | Placeholder         | Description   |
 | ------------------- | ------------- |
@@ -159,9 +155,9 @@ Vérifiez toujours le contenu des scripts téléchargés depuis Internet avant d
 | `__PASSWORD_HASH__` | hash openssl  |
 | `__PROJECT_LOWER__` | neurhomia     |
 | `__PROJECT_NAME__`  | NeurHomIA     |
-| `__FIRSTBOOT_URL__` | script GitHub |
+| `__FIRSTBOOT_URL__` | URL script    |
 
-#### GRUB (`grub.cfg.template`)
+### GRUB
 
 | Placeholder         | Valeur    |
 | ------------------- | --------- |
@@ -169,87 +165,54 @@ Vérifiez toujours le contenu des scripts téléchargés depuis Internet avant d
 | `__PROJECT_LOWER__` | neurhomia |
 | `__PROJECT_UPPER__` | NEURHOMIA |
 
-#### Exemple GRUB
+---
 
-```cfg
-set default=0
-set timeout=10
+## 🚀 Script firstboot
 
-menuentry "Autoinstall Ubuntu Server __PROJECT_NAME__" {
-    set gfxpayload=keep
-    linux  /casper/vmlinuz autoinstall \
-           "ds=nocloud;s=/cdrom/autoinstall/" debug --- autoinstall
-    initrd /casper/initrd
-}
-```
+📍 `/opt/neurhomia/firstboot.sh`
 
-#### 5. 🚀 Script firstboot
+### Actions exécutées
 
-Chemin : `/opt/neurhomia/firstboot.sh`
+* 🌍 Configuration timezone
+* 🔐 Sécurisation accès
+* 🔑 Configuration SSH
+* 🔥 UFW + fail2ban
+* 🐳 Installation Docker
+* 📡 Configuration MQTT
 
-### Actions typiques
+ℹ️ Le script est validé automatiquement lors du build.
 
-* Fuseau horaire
-* Changement mot de passe
-* SSH (clés)
-* UFW + fail2ban
-* Docker
-* MQTT
+---
 
-ℹ️ Validation automatique des sections obligatoires.
-
-
-#### 6. ⚙️ Options CLI
+## ⚙️ Options CLI
 
 ```bash
 ./build-iso.sh --noforce
 ```
 
-* `--noforce` : stop si erreur validation
+* `--noforce` : stop si validation échoue
 
+---
 
-#### 7. 📦 Sortie
+## 🛠️ Dépannage
 
-```text
-~/neurhomia-key/neurhomia-server-<version>-auto.iso
-```
-
-SHA256 affiché en fin de build.
-
-----
-
-### 8. 🛠️ Dépannage
-
-#### Dépendances
+### Dépendances
 
 ```bash
 sudo apt update
-sudo apt install wget p7zip-full openssl xorriso \
-  squashfs-tools schroot rsync syslinux-utils isolinux genisoimage
+sudo apt install wget p7zip-full openssl xorriso
 ```
 
-#### wget KO
-
-Tester :
-
-```bash
-wget -O /tmp/test https://raw.githubusercontent.com/cce66/NeurHomIA/main/build-iso2usb/autoinstall/user-data.template
-```
-
-#### YAML
+### YAML
 
 ```bash
 sudo apt install python3-yaml
 ```
 
-#### eltorito.img manquant
+### Erreurs fréquentes
 
-→ ISO Ubuntu incompatible
-
-#### GRUB non pris en compte
-
-→ vérifier emplacement template
-
+* ❌ `eltorito.img` → ISO incompatible
+* ❌ GRUB ignoré → vérifier template
 
 ---
 
@@ -259,26 +222,12 @@ Apache 2.0
 
 ---
 
-## 🤝 Crédits
+## 🤝 Contribuer
 
-* cce66
+PR bienvenues 👍
 
 ---
 
 ## 🔗 Liens
 
 * GitHub : [https://github.com/cce66/NeurHomIA](https://github.com/cce66/NeurHomIA)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
