@@ -9,17 +9,16 @@ PROJECT_NAME="NeurHomIA"
 PROJECT_NAME_LOWER="neurhomia"
 
 UBUNTU_VERSION="22.04.4"
-
 ISO_NAME="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
 ISO_URL="https://releases.ubuntu.com/22.04/${ISO_NAME}"
 
-WORKDIR="$(pwd)/neurhomia-build"
+WORKDIR="$(pwd)/build"
 ISO_DIR="${WORKDIR}/iso"
 EXTRACT_DIR="${WORKDIR}/extract"
 AUTOINSTALL_DIR="${EXTRACT_DIR}/nocloud"
 CUSTOM_ISO="${WORKDIR}/${PROJECT_NAME_LOWER}-installer.iso"
 
-USERNAME="neurhomia"
+USERNAME="ubuntu"
 PASSWORD_HASH="\$6\$rounds=4096\$xyz\$xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyz"
 
 # ==========================================
@@ -28,30 +27,47 @@ PASSWORD_HASH="\$6\$rounds=4096\$xyz\$xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyz"
 
 GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
+RED="\033[0;31m"
 NC="\033[0m"
 
 # ==========================================
-# STEP 01 - PREPARE
+# STEP 01 - CHECK DEPENDENCIES
 # ==========================================
 
-step_01_prepare() {
-    echo -e "${YELLOW}1) Préparation...${NC}"
+step_01_check_deps() {
+    echo -e "${YELLOW}1) Vérification des dépendances...${NC}"
 
-    rm -rf "$ISO_DIR"
-    rm -rf "$EXTRACT_DIR"
+    for cmd in wget rsync xorriso sed; do
+        if ! command -v $cmd &>/dev/null; then
+            echo -e "${RED}   Missing: $cmd${NC}"
+            exit 1
+        fi
+    done
+
+    echo -e "${GREEN}   OK${NC}"
+}
+
+# ==========================================
+# STEP 02 - PREPARE WORKDIR
+# ==========================================
+
+step_02_prepare() {
+    echo -e "${YELLOW}2) Préparation workspace...${NC}"
+
+    rm -rf "$WORKDIR"
     mkdir -p "$ISO_DIR" "$EXTRACT_DIR"
 
     echo -e "${GREEN}   OK${NC}"
 }
 
 # ==========================================
-# STEP 02 - DOWNLOAD ISO
+# STEP 03 - DOWNLOAD ISO
 # ==========================================
 
-step_02_download_iso() {
-    echo -e "${YELLOW}2) Téléchargement ISO...${NC}"
+step_03_download_iso() {
+    echo -e "${YELLOW}3) Téléchargement ISO...${NC}"
 
-    cd "$WORK_DIR"
+    cd "$ISO_DIR"
 
     if [ ! -f "$ISO_NAME" ]; then
         wget "$ISO_URL"
@@ -63,11 +79,11 @@ step_02_download_iso() {
 }
 
 # ==========================================
-# STEP 03 - EXTRACT ISO
+# STEP 04 - EXTRACT ISO
 # ==========================================
 
-step_03_extract_iso() {
-    echo -e "${YELLOW}3) Extraction ISO...${NC}"
+step_04_extract_iso() {
+    echo -e "${YELLOW}4) Extraction ISO...${NC}"
 
     sudo mount -o loop "$ISO_DIR/$ISO_NAME" /mnt
     rsync -a /mnt/ "$EXTRACT_DIR"
@@ -79,18 +95,20 @@ step_03_extract_iso() {
 }
 
 # ==========================================
-# STEP 04 - AUTOINSTALL
+# STEP 05 - CREATE AUTOINSTALL
 # ==========================================
 
-step_04_autoinstall() {
-    echo -e "${YELLOW}4) Configuration autoinstall...${NC}"
+step_05_autoinstall() {
+    echo -e "${YELLOW}5) Création autoinstall (mode frontend)...${NC}"
 
+    rm -rf "$AUTOINSTALL_DIR"
     mkdir -p "$AUTOINSTALL_DIR"
 
     cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
 autoinstall:
   version: 1
+
   identity:
     hostname: ${PROJECT_NAME_LOWER}
     username: ${USERNAME}
@@ -139,7 +157,7 @@ EOF2
 systemctl daemon-reexec
 systemctl enable neurhomia-installer
 
-echo '[OK] Installer prêt sur port 8081'
+echo '[OK] Installer disponible sur http://IP:8081'
 EOL"
 
     - curtin in-target --target=/target chmod +x /opt/neurhomia/firstboot.sh
@@ -152,11 +170,11 @@ EOF
 }
 
 # ==========================================
-# STEP 05 - GRUB MODIFY
+# STEP 06 - MODIFY GRUB
 # ==========================================
 
-step_05_grub() {
-    echo -e "${YELLOW}5) Modification GRUB...${NC}"
+step_06_grub() {
+    echo -e "${YELLOW}6) Modification GRUB...${NC}"
 
     sed -i 's|---| autoinstall ds=nocloud\\;s=/cdrom/nocloud/ ---|g' \
     "$EXTRACT_DIR/boot/grub/grub.cfg"
@@ -165,16 +183,16 @@ step_05_grub() {
 }
 
 # ==========================================
-# STEP 06 - BUILD ISO
+# STEP 07 - BUILD ISO
 # ==========================================
 
-step_06_build_iso() {
-    echo -e "${YELLOW}6) Construction ISO...${NC}"
+step_07_build_iso() {
+    echo -e "${YELLOW}7) Build ISO...${NC}"
 
     cd "$EXTRACT_DIR"
 
     sudo xorriso -as mkisofs \
-      -r -V "$PROJECT_NAME Installer" \
+      -r -V "${PROJECT_NAME} Installer" \
       -o "$CUSTOM_ISO" \
       -J -l \
       -b boot/grub/i386-pc/eltorito.img \
@@ -189,26 +207,26 @@ step_06_build_iso() {
 }
 
 # ==========================================
-# STEP 07 - VALIDATION
+# STEP 08 - VALIDATE
 # ==========================================
 
-step_07_validate() {
-    echo -e "${YELLOW}7) Validation...${NC}"
+step_08_validate() {
+    echo -e "${YELLOW}8) Validation...${NC}"
 
-    if [ -f "$CUSTOM_ISO" ]; then
-        echo -e "${GREEN}   ISO OK${NC}"
-    else
-        echo "Erreur ISO"
+    if [ ! -f "$CUSTOM_ISO" ]; then
+        echo -e "${RED}   ISO non générée${NC}"
         exit 1
     fi
+
+    echo -e "${GREEN}   ISO OK${NC}"
 }
 
 # ==========================================
-# STEP 08 - BURN USB (OPTION)
+# STEP 09 - BURN USB
 # ==========================================
 
-step_08_burn() {
-    echo -e "${YELLOW}8) Graver sur USB ? (y/n)${NC}"
+step_09_burn() {
+    echo -e "${YELLOW}9) Graver sur USB ? (y/n)${NC}"
     read -r RESP
 
     if [ "$RESP" != "y" ]; then
@@ -216,7 +234,7 @@ step_08_burn() {
     fi
 
     lsblk -d -o NAME,SIZE,MODEL
-    echo "Choisir disque (ex: sdb):"
+    echo "Disque (ex: sdb):"
     read -r DISK
 
     sudo dd if="$CUSTOM_ISO" of="/dev/$DISK" bs=4M status=progress oflag=sync
@@ -228,13 +246,14 @@ step_08_burn() {
 # MAIN
 # ==========================================
 
-step_01_prepare
-step_02_download_iso
-step_03_extract_iso
-step_04_autoinstall
-step_05_grub
-step_06_build_iso
-step_07_validate
-step_08_burn
+step_01_check_deps
+step_02_prepare
+step_03_download_iso
+step_04_extract_iso
+step_05_autoinstall
+step_06_grub
+step_07_build_iso
+step_08_validate
+step_09_burn
 
-echo -e "${GREEN}✔ DONE : $CUSTOM_ISO${NC}"
+echo -e "${GREEN}✔ ISO prête : $CUSTOM_ISO${NC}"
