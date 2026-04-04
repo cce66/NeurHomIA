@@ -9,6 +9,7 @@ PROJECT_NAME="NeurHomIA"
 PROJECT_NAME_LOWER="neurhomia"
 
 UBUNTU_VERSION="22.04.4"
+
 ISO_NAME="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
 ISO_URL="https://releases.ubuntu.com/22.04/${ISO_NAME}"
 
@@ -36,7 +37,8 @@ NC="\033[0m"
 step_01_prepare() {
     echo -e "${YELLOW}1) Préparation...${NC}"
 
-    rm -rf "$WORKDIR"
+    rm -rf "$ISO_DIR"
+    rm -rf "$EXTRACT_DIR"
     mkdir -p "$ISO_DIR" "$EXTRACT_DIR"
 
     echo -e "${GREEN}   OK${NC}"
