@@ -12,7 +12,7 @@ UBUNTU_VERSION="22.04.4"
 ISO_NAME="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
 ISO_URL="https://releases.ubuntu.com/22.04/${ISO_NAME}"
 
-WORKDIR="$(pwd)/build"
+WORKDIR="$(pwd)/NeurHomIA-build"
 ISO_DIR="${WORKDIR}/iso"
 EXTRACT_DIR="${WORKDIR}/extract"
 AUTOINSTALL_DIR="${EXTRACT_DIR}/nocloud"
