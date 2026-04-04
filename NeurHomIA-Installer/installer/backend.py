@@ -11,7 +11,6 @@ LOG_FILE = "/opt/neurhomia/installer/install.log"
 # =========================
 # UTIL
 # =========================
-
 def safe(name):
     return re.match(r'^[a-zA-Z0-9_.-]+$', name)
 
@@ -27,7 +26,6 @@ def run_script(name, arg=""):
 # =========================
 # CONFIG ENV
 # =========================
-
 @app.route("/config/env", methods=["POST"])
 def env():
     data = request.json
@@ -39,7 +37,6 @@ def env():
 # =========================
 # INSTALL
 # =========================
-
 @app.route("/install/<name>", methods=["POST"])
 def install(name):
     mapping = {
@@ -64,7 +61,6 @@ def mcp():
 # =========================
 # FULL INSTALL
 # =========================
-
 @app.route("/install/full", methods=["POST"])
 def full():
     steps = [
@@ -82,7 +78,6 @@ def full():
 # =========================
 # DOCKER CONTROL
 # =========================
-
 @app.route("/docker/<action>/<name>", methods=["POST"])
 def docker(action,name):
     if not safe(name): return jsonify({"error":"bad name"})
@@ -91,7 +86,6 @@ def docker(action,name):
 # =========================
 # UPDATE STACK
 # =========================
-
 @app.route("/update/<path:name>", methods=["POST"])
 def update(name):
     return jsonify({"output": run_script("update_stack.sh", name)})
@@ -99,7 +93,6 @@ def update(name):
 # =========================
 # AUTO RESTART
 # =========================
-
 @app.route("/autorestart", methods=["POST"])
 def autorestart():
     data = request.json
@@ -110,7 +103,6 @@ def autorestart():
 # =========================
 # STATUS
 # =========================
-
 @app.route("/services")
 def services():
     r = subprocess.run("docker ps -a --format '{{.Names}}|{{.Status}}'", shell=True, capture_output=True, text=True)
@@ -135,6 +127,14 @@ def logs():
     if os.path.exists(LOG_FILE):
         return open(LOG_FILE).read()
     return "no logs"
+
+
+@app.route("/mcp/list")
+def mcp_list():
+    base="/opt/neurhomia/mcp"
+    if not os.path.exists(base):
+        return jsonify([])
+    return jsonify([d for d in os.listdir(base) if d.startswith("MCP-")])
 
 # =========================
 app.run(host="0.0.0.0", port=8081)
