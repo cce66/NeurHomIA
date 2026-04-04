@@ -1,0 +1,9 @@
+services:
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt
+    restart: always
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8083:8080"
