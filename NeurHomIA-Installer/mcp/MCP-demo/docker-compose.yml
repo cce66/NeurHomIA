@@ -1,0 +1,6 @@
+services:
+  demo:
+    image: nginx
+    container_name: mcp-demo
+    ports:
+      - "8082:80"
