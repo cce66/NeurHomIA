@@ -18,7 +18,7 @@ EXTRACT_DIR="${WORKDIR}/extract"
 AUTOINSTALL_DIR="${EXTRACT_DIR}/nocloud"
 CUSTOM_ISO="${WORKDIR}/${PROJECT_NAME_LOWER}-installer.iso"
 
-USERNAME="ubuntu"
+USERNAME="neurhomia"
 PASSWORD_HASH="\$6\$rounds=4096\$xyz\$xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyz"
 
 # ==========================================
