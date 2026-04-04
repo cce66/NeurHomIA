@@ -51,7 +51,7 @@ step_01_prepare() {
 step_02_download_iso() {
     echo -e "${YELLOW}2) Téléchargement ISO...${NC}"
 
-    cd "$ISO_DIR"
+    cd "$WORK_DIR"
 
     if [ ! -f "$ISO_NAME" ]; then
         wget "$ISO_URL"
