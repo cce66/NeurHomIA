@@ -1,108 +1,79 @@
 #!/bin/bash
 set -e
 
-# ==========================================
-# CONFIG
-# ==========================================
-
-PROJECT_NAME="NeurHomIA"
-PROJECT_NAME_LOWER="neurhomia"
-
-UBUNTU_VERSION="22.04.4"
-ISO_NAME="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
-ISO_URL="https://releases.ubuntu.com/22.04/${ISO_NAME}"
-
-WORKDIR="$(pwd)/build"
-ISO_DIR="${WORKDIR}/iso"
-EXTRACT_DIR="${WORKDIR}/extract"
-AUTOINSTALL_DIR="${EXTRACT_DIR}/nocloud"
-CUSTOM_ISO="${WORKDIR}/${PROJECT_NAME_LOWER}-installer.iso"
-
-USERNAME="ubuntu"
-PASSWORD_HASH="\$6\$rounds=4096\$xyz\$xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyz"
-
-# ==========================================
-# COLORS
-# ==========================================
-
-GREEN="\033[0;32m"
-YELLOW="\033[1;33m"
-RED="\033[0;31m"
-NC="\033[0m"
-
-# ==========================================
-# STEP 01 - CHECK DEPENDENCIES
-# ==========================================
-
-step_01_check_deps() {
-    echo -e "${YELLOW}1) Vérification des dépendances...${NC}"
-
-    for cmd in wget rsync xorriso sed; do
-        if ! command -v $cmd &>/dev/null; then
-            echo -e "${RED}   Missing: $cmd${NC}"
-            exit 1
-        fi
-    done
-
-    echo -e "${GREEN}   OK${NC}"
+# =========================
+# 01 - ASK UBUNTU VERSION
+# =========================
+01_ask_ubuntu_version() {
+    echo "[1] Ubuntu version..."
+    UBUNTU_VERSION="22.04.4"
+    ISO_NAME="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
+    ISO_URL="https://releases.ubuntu.com/22.04/${ISO_NAME}"
 }
 
-# ==========================================
-# STEP 02 - PREPARE WORKDIR
-# ==========================================
+# =========================
+# 🔥 02 - VALIDATE FIRSTBOOT (NEUTRALISÉ)
+# =========================
+02_validate_firstboot_script() {
+    echo "[2] Skip firstboot validation (new model)"
+}
 
-step_02_prepare() {
-    echo -e "${YELLOW}2) Préparation workspace...${NC}"
+# =========================
+# 03 - CHECK DEPENDENCIES
+# =========================
+03_check_dependencies() {
+    echo "[3] Check dependencies..."
+    for cmd in wget xorriso rsync sed; do
+        command -v $cmd >/dev/null || { echo "Missing $cmd"; exit 1; }
+    done
+}
+
+# =========================
+# 04 - PREPARE WORKSPACE
+# =========================
+04_prepare_workspace() {
+    WORKDIR="$(pwd)/build"
+    ISO_DIR="$WORKDIR/iso"
+    EXTRACT_DIR="$WORKDIR/extract"
+    AUTOINSTALL_DIR="$EXTRACT_DIR/nocloud"
 
     rm -rf "$WORKDIR"
     mkdir -p "$ISO_DIR" "$EXTRACT_DIR"
-
-    echo -e "${GREEN}   OK${NC}"
 }
 
-# ==========================================
-# STEP 03 - DOWNLOAD ISO
-# ==========================================
-
-step_03_download_iso() {
-    echo -e "${YELLOW}3) Téléchargement ISO...${NC}"
-
+# =========================
+# 05 - DOWNLOAD ISO
+# =========================
+05_download_iso() {
     cd "$ISO_DIR"
-
     if [ ! -f "$ISO_NAME" ]; then
         wget "$ISO_URL"
-    else
-        echo "   ISO déjà présent"
     fi
-
-    echo -e "${GREEN}   OK${NC}"
 }
 
-# ==========================================
-# STEP 04 - EXTRACT ISO
-# ==========================================
-
-step_04_extract_iso() {
-    echo -e "${YELLOW}4) Extraction ISO...${NC}"
-
+# =========================
+# 06 - EXTRACT ISO
+# =========================
+06_extract_iso() {
     sudo mount -o loop "$ISO_DIR/$ISO_NAME" /mnt
     rsync -a /mnt/ "$EXTRACT_DIR"
     sudo umount /mnt
-
     chmod -R +w "$EXTRACT_DIR"
-
-    echo -e "${GREEN}   OK${NC}"
 }
 
-# ==========================================
-# STEP 05 - CREATE AUTOINSTALL
-# ==========================================
-
-step_05_autoinstall() {
-    echo -e "${YELLOW}5) Création autoinstall (mode frontend)...${NC}"
-
-    rm -rf "$AUTOINSTALL_DIR"
+# =========================
+# 07 - PREPARE AUTOINSTALL
+# =========================
+07_prepare_autoinstall_dir() {
     mkdir -p "$AUTOINSTALL_DIR"
+}
+
+# =========================
+# 🔥 08 - CREATE AUTOINSTALL (MODIFIÉ)
+# =========================
+08_create_autoinstall_files() {
+
+    echo "[8] Create autoinstall (frontend mode)"
 
     cat > "$AUTOINSTALL_DIR/user-data" <<EOF
 #cloud-config
@@ -110,9 +81,9 @@ autoinstall:
   version: 1
 
   identity:
-    hostname: ${PROJECT_NAME_LOWER}
-    username: ${USERNAME}
-    password: "${PASSWORD_HASH}"
+    hostname: neurhomia
+    username: ubuntu
+    password: "\$6\$rounds=4096\$xyz\$xyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyzxyz"
 
   ssh:
     install-server: true
@@ -157,7 +128,7 @@ EOF2
 systemctl daemon-reexec
 systemctl enable neurhomia-installer
 
-echo '[OK] Installer disponible sur http://IP:8081'
+echo '[OK] UI disponible sur http://IP:8081'
 EOL"
 
     - curtin in-target --target=/target chmod +x /opt/neurhomia/firstboot.sh
@@ -165,34 +136,34 @@ EOL"
 EOF
 
     echo "instance-id: iid-local01" > "$AUTOINSTALL_DIR/meta-data"
-
-    echo -e "${GREEN}   OK${NC}"
 }
 
-# ==========================================
-# STEP 06 - MODIFY GRUB
-# ==========================================
+# =========================
+# 09 - INTEGRATE AUTOINSTALL
+# =========================
+09_integrate_autoinstall() {
+    echo "[9] Integrate autoinstall (noop, déjà dans extract)"
+}
 
-step_06_grub() {
-    echo -e "${YELLOW}6) Modification GRUB...${NC}"
-
+# =========================
+# 10 - MODIFY GRUB
+# =========================
+10_modify_grub_cfg() {
     sed -i 's|---| autoinstall ds=nocloud\\;s=/cdrom/nocloud/ ---|g' \
     "$EXTRACT_DIR/boot/grub/grub.cfg"
-
-    echo -e "${GREEN}   OK${NC}"
 }
 
-# ==========================================
-# STEP 07 - BUILD ISO
-# ==========================================
+# =========================
+# 11 - CREATE ISO (nom respecté)
+# =========================
+11_create_iso() {
 
-step_07_build_iso() {
-    echo -e "${YELLOW}7) Build ISO...${NC}"
+    CUSTOM_ISO="$WORKDIR/neurhomia-installer.iso"
 
     cd "$EXTRACT_DIR"
 
     sudo xorriso -as mkisofs \
-      -r -V "${PROJECT_NAME} Installer" \
+      -r -V "NeurHomIA Installer" \
       -o "$CUSTOM_ISO" \
       -J -l \
       -b boot/grub/i386-pc/eltorito.img \
@@ -202,58 +173,49 @@ step_07_build_iso() {
       -eltorito-alt-boot \
       -e EFI/boot/bootx64.efi \
       -no-emul-boot .
-
-    echo -e "${GREEN}   ISO générée${NC}"
 }
 
-# ==========================================
-# STEP 08 - VALIDATE
-# ==========================================
-
-step_08_validate() {
-    echo -e "${YELLOW}8) Validation...${NC}"
-
+# =========================
+# 12 - VALIDATE ISO
+# =========================
+12_validate_iso() {
     if [ ! -f "$CUSTOM_ISO" ]; then
-        echo -e "${RED}   ISO non générée${NC}"
+        echo "ISO failed"
         exit 1
     fi
-
-    echo -e "${GREEN}   ISO OK${NC}"
 }
 
-# ==========================================
-# STEP 09 - BURN USB
-# ==========================================
+# =========================
+# 13 - BURN ISO
+# =========================
+13_burn_iso() {
+    echo "Burn ISO? (y/n)"
+    read -r R
 
-step_09_burn() {
-    echo -e "${YELLOW}9) Graver sur USB ? (y/n)${NC}"
-    read -r RESP
+    if [ "$R" != "y" ]; then return; fi
 
-    if [ "$RESP" != "y" ]; then
-        return
-    fi
-
-    lsblk -d -o NAME,SIZE,MODEL
-    echo "Disque (ex: sdb):"
+    lsblk
     read -r DISK
 
-    sudo dd if="$CUSTOM_ISO" of="/dev/$DISK" bs=4M status=progress oflag=sync
-
-    echo -e "${GREEN}   USB prête${NC}"
+    sudo dd if="$CUSTOM_ISO" of="/dev/$DISK" bs=4M status=progress
 }
 
-# ==========================================
+# =========================
 # MAIN
-# ==========================================
+# =========================
 
-step_01_check_deps
-step_02_prepare
-step_03_download_iso
-step_04_extract_iso
-step_05_autoinstall
-step_06_grub
-step_07_build_iso
-step_08_validate
-step_09_burn
+01_ask_ubuntu_version
+02_validate_firstboot_script
+03_check_dependencies
+04_prepare_workspace
+05_download_iso
+06_extract_iso
+07_prepare_autoinstall_dir
+08_create_autoinstall_files
+09_integrate_autoinstall
+10_modify_grub_cfg
+11_create_iso
+12_validate_iso
+13_burn_iso
 
-echo -e "${GREEN}✔ ISO prête : $CUSTOM_ISO${NC}"
+echo "[DONE]"
