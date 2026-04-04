@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NeurHomIA</title>
+<style>
+body { background:#0f172a;color:#eee;font-family:Arial;padding:20px;}
+.card { background:#1e293b;padding:15px;margin:10px;border-radius:10px;}
+button{margin:3px;padding:6px;}
+.running{color:#22c55e}
+.stopped{color:#ef4444}
+</style>
+</head>
+
+<body>
+
+<h1>NeurHomIA Installer</h1>
+
+<div class="card">
+<h2>Install</h2>
+<button onclick="call('/install/full')">INSTALL COMPLET</button>
+<button onclick="call('/install/docker')">Docker</button>
+<button onclick="call('/install/mosquitto')">Mosquitto</button>
+<button onclick="call('/install/neurhomia')">NeurHomIA</button>
+</div>
+
+<div class="card">
+<h2>MQTT</h2>
+<input id="user" value="neurhomia">
+<input id="pass" type="password">
+<button onclick="save()">Save</button>
+</div>
+
+<div class="card">
+<h2>MCP</h2>
+<div id="mcp"></div>
+<button onclick="installMCP()">Install MCP</button>
+</div>
+
+<div class="card">
+<h2>Services</h2>
+<div id="services"></div>
+</div>
+
+<pre id="log"></pre>
+
+<script>
+
+let selected=[]
+
+async function call(url){
+ let r=await fetch(url,{method:"POST"})
+ let t=await r.json()
+ log.textContent=t.output
+ refresh()
+}
+
+async function save(){
+ await fetch("/config/env",{method:"POST",headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({MQTT_USER:user.value,MQTT_PASSWORD:pass.value})})
+ alert("saved")
+}
+
+async function loadMCP(){
+ let r=await fetch("/mcp/list")
+ let d=await r.json()
+ let h=""
+ d.forEach(x=>{
+  h+=`<label><input type=checkbox value="${x}" onchange="sel(this)"> ${x}</label><br>`
+ })
+ mcp.innerHTML=h
+}
+
+function sel(e){
+ if(e.checked) selected.push(e.value)
+ else selected=selected.filter(x=>x!=e.value)
+}
+
+async function installMCP(){
+ let r=await fetch("/install/mcp",{method:"POST",headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({profiles:selected})})
+ let t=await r.json()
+ log.textContent=t.output
+ refresh()
+}
+
+async function refresh(){
+ let r=await fetch("/services")
+ let d=await r.json()
+ let h=""
+ d.forEach(s=>{
+  let run=s.status.includes("Up")
+  h+=`
+  <div>
+  ${s.name} <span class="${run?'running':'stopped'}">${s.status}</span>
+  <button onclick="act('start','${s.name}')">▶</button>
+  <button onclick="act('stop','${s.name}')">■</button>
+  <button onclick="act('restart','${s.name}')">↻</button>
+  <button onclick="update('${s.name}')">⬆</button>
+  <button onclick="auto('${s.name}')">♻</button>
+  </div>`
+ })
+ services.innerHTML=h
+}
+
+async function act(a,n){
+ let r=await fetch(`/docker/${a}/${n}`,{method:"POST"})
+ let t=await r.json()
+ log.textContent=t.output
+ setTimeout(refresh,1000)
+}
+
+async function update(n){
+ let path="/opt/neurhomia/app"
+ let r=await fetch(`/update/${path}`,{method:"POST"})
+ let t=await r.json()
+ log.textContent=t.output
+}
+
+async function auto(n){
+ let path="/opt/neurhomia/app"
+ let r=await fetch("/autorestart",{method:"POST",
+ headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({name:n,path:path})})
+ let t=await r.json()
+ log.textContent=t.output
+}
+
+loadMCP()
+refresh()
+setInterval(refresh,5000)
+
+</script>
+
+</body>
+</html>
