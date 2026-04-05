@@ -1,0 +1,9 @@
+^Cclaude@OptiPlex-27L39Z2:~$ ./build-iso.sh
+[1] Ubuntu version...
+[2] Skip firstboot validation (new model)
+[3] Check dependencies...
+--2026-04-05 02:24:58--  https://releases.ubuntu.com/22.04/ubuntu-22.04.4-live-server-amd64.iso
+Résolution de releases.ubuntu.com (releases.ubuntu.com)… 2620:2d:4002:1::107, 2620:2d:4002:1::108, 2620:2d:4000:1::17, ...
+Connexion à releases.ubuntu.com (releases.ubuntu.com)|2620:2d:4002:1::107|:443… connecté.
+requête HTTP transmise, en attente de la réponse… 404 Not Found
+2026-04-05 02:25:01 erreur 404 : Not Found.
