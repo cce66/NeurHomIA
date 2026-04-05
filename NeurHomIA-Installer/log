@@ -1,3 +1,4 @@
+BUIL-ISO A TOI
 ^Cclaude@OptiPlex-27L39Z2:~$ ./build-iso.sh
 [1] Ubuntu version...
 [2] Skip firstboot validation (new model)
@@ -7,3 +8,166 @@ Résolution de releases.ubuntu.com (releases.ubuntu.com)… 2620:2d:4002:1::107,
 Connexion à releases.ubuntu.com (releases.ubuntu.com)|2620:2d:4002:1::107|:443… connecté.
 requête HTTP transmise, en attente de la réponse… 404 Not Found
 2026-04-05 02:25:01 erreur 404 : Not Found.
+
+
+BUILD-ISO ORIGINALE
+
+Entrez le mot de passe pour la commande sudo :
+=>
+Log enregistré dans : /home/claude/neurhomia-key/neurhomia-build-20260405_022834.log
+=========================================
+Début de build-iso.sh : dim. 05 avril 2026 02:28:34 CEST
+Exécuté par : claude
+=========================================
+1) Quelle version d'Ubuntu Server souhaitez-vous installer ? (défaut : 24.04.4)
+   Version : 
+   Version par défaut sélectionnée : 24.04.4
+
+   Variables du script: 
+   FORCE_BUILD: true
+   SUDO_PASSWORD: ********
+   WORK_DIR: /home/claude/neurhomia-key
+   ISO_VERSION: 24.04.4
+   ISO_FILENAME: ubuntu-24.04.4-live-server-amd64.iso
+   ISO_URL: https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso
+   EXTRACT_DIR: /home/claude/neurhomia-key/extracted
+   AUTOINSTALL_DIR: /home/claude/neurhomia-key/autoinstall
+   AUTOINSTALL_TEMPLATE_DIR: /home/claude/neurhomia-key/autoinstall_template
+   OUTPUT_ISO: /home/claude/neurhomia-key/neurhomia-server-24.04.4-auto.iso
+   LABEL: NEURHOMIA_SRV
+
+2) Validation de firstboot.sh...
+   ✘ Bienvenue   ✔ Configuration   ✔ Fuseau   ✔ Mot   ✔ Configuration   ✔ Pare-feu   ✘ Fail2ban   ✔ Mises   ✔ Mot   ✔ Installation   ✔ Utilitaires   ✘ Finalisation   ✔ à   ✔ automatiques   ✔ CLI   ✔ de   ✔ de   ✔ Docker   ✔ horaire   ✔ jour   ✔ MQTT   ✔ passe   ✔ passe   ✔ réseau   ✔ SSH   ✔ UFW
+
+   ⚠ 3 section(s) manquante(s) dans firstboot.sh
+   --force activé : construction forcée malgré les sections manquantes.
+
+3) Vérification des dépendances...
+   Toutes les dépendances sont installées.
+
+4) Préparation de l'espace de travail...
+   Ancien dossier autoinstall sauvegardé sous : /home/claude/neurhomia-key/autoinstall_20260405_022836
+
+5) Téléchargement de l'ISO Ubuntu Server 24.04.4...
+   L'ISO ubuntu-24.04.4-live-server-amd64.iso existe déjà dans /home/claude/neurhomia-key. Utilisation de la copie locale.
+
+6) Extraction de l'ISO Ubuntu Server 24.04.4...
+   Début de l'extraction...
+
+7-Zip 23.01 (x64) : Copyright (c) 1999-2023 Igor Pavlov : 2023-06-20
+ 64-bit locale=fr_FR.UTF-8 Threads:6 OPEN_MAX:1024
+
+Scanning the drive for archives:
+1 file, 3405469696 bytes (3248 MiB)
+
+Extracting archive: /home/claude/neurhomia-key/ubuntu-24.04.4-live-server-amd64.iso
+
+WARNINGS:
+There are data after the end of archive
+
+--
+Path = /home/claude/neurhomia-key/ubuntu-24.04.4-live-server-amd64.iso
+Type = Iso
+WARNINGS:
+There are data after the end of archive
+Physical Size = 3405129728
+Tail Size = 339968
+Created = 2026-02-10 08:52:50.00
+Modified = 2026-02-10 08:52:50.00
+
+Everything is Ok
+
+Archives with Warnings: 1
+
+Warnings: 1
+Folders: 204
+Files: 867
+Size:       3402193385
+Compressed: 3405469696
+   Extraction terminée.
+
+7) Génération du hash du mot de passe par défaut...
+   Hash généré.
+
+8) Création des fichiers d'autoinstall...
+   Téléchargement des templates depuis GitHub...
+--2026-04-05 02:29:47--  https://raw.githubusercontent.com/cce66/NeurHomIA-ISO2USB/main/build-iso2usb/autoinstall/user-data.template
+Résolution de raw.githubusercontent.com (raw.githubusercontent.com)… 2606:50c0:8003::154, 2606:50c0:8002::154, 2606:50c0:8001::154, ...
+Connexion à raw.githubusercontent.com (raw.githubusercontent.com)|2606:50c0:8003::154|:443… connecté.
+requête HTTP transmise, en attente de la réponse… 200 OK
+Taille : 1311 (1,3K) [text/plain]
+Enregistre : ‘/home/claude/neurhomia-key/autoinstall_template/user-data.template’
+
+     0K .                                                     100%  116M=0s
+
+2026-04-05 02:29:47 (116 MB/s) - ‘/home/claude/neurhomia-key/autoinstall_template/user-data.template’ enregistré [1311/1311]
+
+--2026-04-05 02:29:48--  https://raw.githubusercontent.com/cce66/NeurHomIA-ISO2USB/main/build-iso2usb/autoinstall/meta-data
+Résolution de raw.githubusercontent.com (raw.githubusercontent.com)… 2606:50c0:8003::154, 2606:50c0:8001::154, 2606:50c0:8002::154, ...
+Connexion à raw.githubusercontent.com (raw.githubusercontent.com)|2606:50c0:8003::154|:443… connecté.
+requête HTTP transmise, en attente de la réponse… 200 OK
+Taille : 1 [text/plain]
+Enregistre : ‘/home/claude/neurhomia-key/autoinstall_template/meta-data’
+
+     0K                                                       100% 16,2K=0s
+
+2026-04-05 02:29:48 (16,2 KB/s) - ‘/home/claude/neurhomia-key/autoinstall_template/meta-data’ enregistré [1/1]
+
+   Templates téléchargés avec succès. Personnalisation en cours...
+   Fichiers d'autoinstall personnalisés et prêts.
+
+8.5) Validation de la syntaxe YAML du fichier user-data...
+   Validation avec Python/yaml...
+   ✅ Syntaxe YAML valide !
+
+10) Configuration du menu GRUB...
+   Téléchargement du template GRUB depuis GitHub...
+--2026-04-05 02:29:49--  https://raw.githubusercontent.com/cce66/NeurHomIA-ISO2USB/main/build-iso2usb/boot/grub/grub.cfg.template
+Résolution de raw.githubusercontent.com (raw.githubusercontent.com)… 2606:50c0:8001::154, 2606:50c0:8003::154, 2606:50c0:8000::154, ...
+Connexion à raw.githubusercontent.com (raw.githubusercontent.com)|2606:50c0:8001::154|:443… connecté.
+requête HTTP transmise, en attente de la réponse… 200 OK
+Taille : 491 [text/plain]
+Enregistre : ‘/tmp/tmp.IqzehvddVZ/grub.cfg.template’
+
+     0K                                                       100% 45,8M=0s
+
+2026-04-05 02:29:49 (45,8 MB/s) - ‘/tmp/tmp.IqzehvddVZ/grub.cfg.template’ enregistré [491/491]
+
+   Template téléchargé avec succès. Personnalisation...
+   Copie vers /home/claude/neurhomia-key/extracted/EFI/BOOT/grub.cfg
+   Copie vers /home/claude/neurhomia-key/extracted/EFI/ubuntu/grub.cfg
+   Splash GRUB installé.
+   GRUB configuré avec le template personnalisé.
+
+11) Création de la nouvelle ISO (avec xorriso)...
+
+   Ancienne ISO sauvegardée sous : /home/claude/neurhomia-key/neurhomia-server-24.04.4-auto_20260405_022951.iso
+
+   Création de l'ISO bootable hybride (BIOS + UEFI)...
+xorriso 1.5.6 : RockRidge filesystem manipulator, libburnia project.
+
+Drive current: -outdev 'stdio:/home/claude/neurhomia-key/neurhomia-server-24.04.4-auto.iso'
+Media current: stdio file, overwriteable
+Media status : is blank
+Media summary: 0 sessions, 0 data blocks, 0 data, 1247g free
+Added to ISO image: directory '/'='/home/claude/neurhomia-key/extracted'
+xorriso : UPDATE :    1081 files added in 1 seconds
+xorriso : UPDATE :    1081 files added in 1 seconds
+xorriso : NOTE : Copying to System Area: 432 bytes from file '/usr/lib/ISOLINUX/isohdpfx.bin'
+libisofs: NOTE : Automatically adjusted MBR geometry to 1020/204/32
+libisofs: NOTE : Aligned image size to cylinder size by 1270 blocks
+xorriso : UPDATE :  3.13% done
+xorriso : UPDATE :  39.53% done
+xorriso : UPDATE :  76.01% done
+xorriso : UPDATE :  94.15% done
+xorriso : UPDATE :  98.96% done
+ISO image produced: 1664640 sectors
+Written to medium : 1664640 sectors at LBA 0
+Writing to 'stdio:/home/claude/neurhomia-key/neurhomia-server-24.04.4-auto.iso' completed successfully.
+
+   ISO créée avec succès : /home/claude/neurhomia-key/neurhomia-server-24.04.4-auto.iso
+
+   Vérification du contenu de l'ISO avec isoinfo...
+   ✅ Dossier autoinstall présent dans l'ISO.
+
+12) Validation de l'ISO générée...
